@@ -458,7 +458,7 @@ int main_test(int sel, int mode)
 	isp = CreateAWIspApi();
 
 	isp->ispApiInit();
-	isp->ispGetIspId(dev_id);
+	isp_id = isp->ispGetIspId(dev_id);
 	if (largeImg_mode == 1) {
 		ret = isp->ispSetIspLargeImage(isp_id);
 		if (ret < 0) {

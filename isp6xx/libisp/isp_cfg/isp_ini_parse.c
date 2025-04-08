@@ -41,6 +41,7 @@
 #include "SENSOR_H/gc1084_mipi_default_ini_v821.h"
 #include "SENSOR_H/gc2053_mipi_default_ini_v821.h"
 #elif (ISP_VERSION == 606)
+#include "SENSOR_H/max9296a_mipi_default_ini_t536.h"
 #include "SENSOR_H/sc035hgs_mr536.h"
 #include "SENSOR_H/ov8856_mipi_mr536.h"
 #else
@@ -934,6 +935,7 @@ struct isp_cfg_array cfg_arr[] = {
 	{"gc1084_mipi", "gc1084_mipi_default_ini_v821", 1280, 720, 20, 0, 0, &gc1084_mipi_gj_color_isp_cfg},
 	{"gc2053_mipi", "gc2053_mipi_default_ini_v821", 1920, 1080, 20, 0, 0, &gc2053_mipi_v821_isp_cfg},
 #elif (ISP_VERSION == 606)
+	{"max9296a_mipi", "max9296a_mipi_default_ini_t536", 1920, 1536, 30, 0, 0, &max9296a_mipi_isp_cfg},
 	{"ov8856_mipi", "ov8856_mipi_mr536_isp_cfg", 2592, 1944, 30, 0, 0, &ov8856_mipi_isp_cfg},
 	{"sc035hgs", "sc035hgs_mr536_isp_cfg", 640, 480, 30, 0, 0, &sc035hgs_mr536_isp_cfg},
 #else
