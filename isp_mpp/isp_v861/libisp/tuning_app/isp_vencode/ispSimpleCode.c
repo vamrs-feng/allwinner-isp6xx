@@ -17,7 +17,8 @@
 #include <dlfcn.h>
 #include <sys/time.h>
 #include <string.h>
-
+#include <sys/types.h>
+#include <sys/wait.h>
 /****************************************************************************************************************
  * define
  ***************************************************************************************************************/
@@ -27,13 +28,9 @@
 #define VIDEOCODEC_FAIL		(-1)
 #define ALIGN_XXB(y, x)		(((x) + ((y)-1)) & ~((y)-1))
 #define VERSION_STRING		"20201230-V1.0"
-#if (ISP_VERSION == 603)
 #define VBV_TOTAL_SIZE		(2 * 1024 * 1024)
-#else
-#define VBV_TOTAL_SIZE		(12 * 1024 * 1024)
-#endif
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+#if (ISP_VERSION == 610)
 #define VENC_STATIC_LIBRARY
 #else
 #define VENC_DYNAMIC_LIBRARY
@@ -42,7 +39,7 @@
 /****************************************************************************************************************
  * vencoder library function define
  ***************************************************************************************************************/
-#if (ISP_VERSION != 600 && ISP_VERSION != 603)
+#if (ISP_VERSION != 610)
 typedef VideoEncoder* (* VideoEncCreateFunc)(VENC_CODEC_TYPE eCodecType);
 typedef void (* VideoEncDestroyFunc)(VideoEncoder* pEncoder);
 typedef int (* VideoEncInitFunc)(VideoEncoder* pEncoder, VencBaseConfig* pConfig);
@@ -74,7 +71,7 @@ static FreeOneBitStreamFrameFunc FreeOneBitStreamFrameDl = NULL;
 static VideoEncGetParameterFunc VideoEncGetParameterDl = NULL;
 static VideoEncSetParameterFunc VideoEncSetParameterDl = NULL;
 static VideoEncoderSetFreqFunc VideoEncoderSetFreqDl = NULL;
-#else //ISP600
+#else //ISP610
 typedef VideoEncoder* (* VideoEncCreateFunc)(VENC_CODEC_TYPE eCodecType);
 typedef void (* VideoEncDestroyFunc)(VideoEncoder* pEncoder);
 typedef int (* VideoEncInitFunc)(VideoEncoder* pEncoder, VencBaseConfig* pConfig);
@@ -131,9 +128,8 @@ static VideoEncSetCallbacksFunc VideoEncSetCallbacksDl =NULL;
 static void *vencoderLib = NULL;
 // Create in openEnc() and destory in closeEnc()
 static VideoEncoder* pVideoEnc = NULL;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+static VencBaseConfig gBaseConfig;
 static sem_t inputFrameSem;
-#endif
 
 typedef struct {
     unsigned int width;
@@ -152,7 +148,6 @@ static long long GetNowUs(void)
 	return (long long)tv.tv_sec * 1000000ll + tv.tv_usec;
 }
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 static int semTimedWait(sem_t* sem, int64_t time_ms)
 {
     int err;
@@ -226,7 +221,6 @@ static int inputBufferDone(VideoEncoder* pEncoder,    void* pAppData,
 
     return 0;
 }
-#endif
 
 void init_jpeg_exif(EXIFInfo *exifinfo)
 {
@@ -283,232 +277,6 @@ void init_jpeg_rate_ctrl(jpeg_func_t *jpeg_func)
     jpeg_func->bitRateRange.bitRateMin = 10*1024*1024;
 }
 
-#if 0
-void init_overlay_info(VencOverlayInfoS *pOverlayInfo, encode_param_t *encode_param)
-{
-	int i;
-	unsigned char num_bitMap = 2;
-	BitMapInfoS* pBitMapInfo;
-	unsigned int time_id_list[19];
-	unsigned int start_mb_x;
-	unsigned int start_mb_y;
-
-	memset(pOverlayInfo, 0, sizeof(VencOverlayInfoS));
-
-#if 0
-	char filename[64];
-	int ret;
-	for(i = 0; i < num_bitMap; i++)
-	{
-		FILE* icon_hdle = NULL;
-		int width  = 0;
-		int height = 0;
-
-		sprintf(filename, "%s%d.bmp", "/mnt/libcedarc/bitmap/icon_720p_",i);
-
-		icon_hdle	= fopen(filename, "r");
-		if (icon_hdle == NULL) {
-			printf("get wartermark %s error\n", filename);
-			return;
-		}
-
-		//get watermark picture size
-		fseek(icon_hdle, 18, SEEK_SET);
-		fread(&width, 1, 4, icon_hdle);
-		fread(&height, 1, 4, icon_hdle);
-
-		fseek(icon_hdle, 54, SEEK_SET);
-
-		bit_map_info[i].argb_addr = NULL;
-		bit_map_info[i].width = 0;
-		bit_map_info[i].height = 0;
-
-		bit_map_info[i].width = width;
-		bit_map_info[i].height = height*(-1);
-
-		bit_map_info[i].width_aligh16 = ALIGN_XXB(16, bit_map_info[i].width);
-		bit_map_info[i].height_aligh16 = ALIGN_XXB(16, bit_map_info[i].height);
-		if(bit_map_info[i].argb_addr == NULL) {
-			bit_map_info[i].argb_addr =
-			(unsigned char*)malloc(bit_map_info[i].width_aligh16*bit_map_info[i].height_aligh16*4);
-
-			if(bit_map_info[i].argb_addr == NULL)
-			{
-				loge("malloc bit_map_info[%d].argb_addr fail\n", i);
-				return;
-			}
-		}
-		logd("bitMap[%d] size[%d,%d], size_align16[%d, %d], argb_addr:%p\n", i,
-									bit_map_info[i].width,
-									bit_map_info[i].height,
-									bit_map_info[i].width_aligh16,
-									bit_map_info[i].height_aligh16,
-									bit_map_info[i].argb_addr);
-
-		ret = fread(bit_map_info[i].argb_addr, 1,
-			bit_map_info[i].width*bit_map_info[i].height*4, icon_hdle);
-		if(ret != bit_map_info[i].width*bit_map_info[i].height*4)
-			loge("read bitMap[%d] error, ret value:%d\n", i, ret);
-
-		bit_map_info[i].size = bit_map_info[i].width_aligh16 * bit_map_info[i].height_aligh16 * 4;
-
-		if (icon_hdle) {
-			fclose(icon_hdle);
-			icon_hdle = NULL;
-		}
-	}
-
-	//time 2017-04-27 18:28:26
-	time_id_list[0] = 2;
-	time_id_list[1] = 0;
-	time_id_list[2] = 1;
-	time_id_list[3] = 7;
-	time_id_list[4] = 11;
-	time_id_list[5] = 0;
-	time_id_list[6] = 4;
-	time_id_list[7] = 11;
-	time_id_list[8] = 2;
-	time_id_list[9] = 7;
-	time_id_list[10] = 10;
-	time_id_list[11] = 1;
-	time_id_list[12] = 8;
-	time_id_list[13] = 12;
-	time_id_list[14] = 2;
-	time_id_list[15] = 8;
-	time_id_list[16] = 12;
-	time_id_list[17] = 2;
-	time_id_list[18] = 6;
-
-	logd("pOverlayInfo:%p\n", pOverlayInfo);
-	pOverlayInfo->blk_num = 19;
-#else
-		FILE* icon_hdle = NULL;
-		int width  = 464;
-		int height = 32;
-		memset(time_id_list, 0 ,sizeof(time_id_list));
-
-		icon_hdle = fopen(encode_param->overlay_file, "r");
-		logd("icon_hdle = %p",icon_hdle);
-		if (icon_hdle == NULL) {
-			printf("get icon_hdle error\n");
-			return;
-		}
-
-		for(i = 0; i < num_bitMap; i++)
-		{
-			bit_map_info[i].argb_addr = NULL;
-			bit_map_info[i].width = width;
-			bit_map_info[i].height = height;
-
-			bit_map_info[i].width_aligh16 = ALIGN_XXB(16, bit_map_info[i].width);
-			bit_map_info[i].height_aligh16 = ALIGN_XXB(16, bit_map_info[i].height);
-			if(bit_map_info[i].argb_addr == NULL) {
-				bit_map_info[i].argb_addr =
-			(unsigned char*)malloc(bit_map_info[i].width_aligh16*bit_map_info[i].height_aligh16*4);
-
-				if(bit_map_info[i].argb_addr == NULL)
-				{
-					loge("malloc bit_map_info[%d].argb_addr fail\n", i);
-					if (icon_hdle) {
-						fclose(icon_hdle);
-						icon_hdle = NULL;
-					}
-
-					return;
-				}
-			}
-			logd("bitMap[%d] size[%d,%d], size_align16[%d, %d], argb_addr:%p\n", i,
-														bit_map_info[i].width,
-														bit_map_info[i].height,
-														bit_map_info[i].width_aligh16,
-														bit_map_info[i].height_aligh16,
-														bit_map_info[i].argb_addr);
-
-			int ret;
-			ret = fread(bit_map_info[i].argb_addr, 1,
-						bit_map_info[i].width*bit_map_info[i].height*4, icon_hdle);
-			if(ret != (int)(bit_map_info[i].width*bit_map_info[i].height*4))
-			loge("read bitMap[%d] error, ret value:%d\n", i, ret);
-
-			bit_map_info[i].size
-				= bit_map_info[i].width_aligh16 * bit_map_info[i].height_aligh16 * 4;
-			fseek(icon_hdle, 0, SEEK_SET);
-		}
-		if (icon_hdle) {
-			fclose(icon_hdle);
-			icon_hdle = NULL;
-		}
-#endif
-		pOverlayInfo->argb_type = VENC_OVERLAY_ARGB8888;
-		pOverlayInfo->blk_num = num_bitMap;
-		logd("blk_num:%d, argb_type:%d\n", pOverlayInfo->blk_num, pOverlayInfo->argb_type);
-		//pOverlayInfo->invert_threshold = 200;
-		//pOverlayInfo->invert_mode = 3;
-
-		start_mb_x = 0;
-		start_mb_y = 0;
-		for(i=0; i<pOverlayInfo->blk_num; i++)
-		{
-			//id = time_id_list[i];
-			//pBitMapInfo = &bit_map_info[id];
-			pBitMapInfo = &bit_map_info[i];
-
-			pOverlayInfo->overlayHeaderList[i].start_mb_x = start_mb_x;
-			pOverlayInfo->overlayHeaderList[i].start_mb_y = start_mb_y;
-			pOverlayInfo->overlayHeaderList[i].end_mb_x = start_mb_x
-										+ (pBitMapInfo->width_aligh16 / 16 - 1);
-			pOverlayInfo->overlayHeaderList[i].end_mb_y = start_mb_y
-										+ (pBitMapInfo->height_aligh16 / 16 -1);
-
-			pOverlayInfo->overlayHeaderList[i].extra_alpha_flag = 0;
-			pOverlayInfo->overlayHeaderList[i].extra_alpha = 8;
-			if(i%3 == 0)
-				pOverlayInfo->overlayHeaderList[i].overlay_type = LUMA_REVERSE_OVERLAY;
-			else if(i%2 == 0 && i!=0)
-				pOverlayInfo->overlayHeaderList[i].overlay_type = COVER_OVERLAY;
-			else
-				pOverlayInfo->overlayHeaderList[i].overlay_type = NORMAL_OVERLAY;
-
-
-			if(pOverlayInfo->overlayHeaderList[i].overlay_type == COVER_OVERLAY)
-			{
-				pOverlayInfo->overlayHeaderList[i].cover_yuv.cover_y = 0xff;
-				pOverlayInfo->overlayHeaderList[i].cover_yuv.cover_u = 0xff;
-				pOverlayInfo->overlayHeaderList[i].cover_yuv.cover_v = 0xff;
-			}
-
-			//pOverlayInfo->overlayHeaderList[i].bforce_reverse_flag = 1;
-
-			pOverlayInfo->overlayHeaderList[i].overlay_blk_addr = pBitMapInfo->argb_addr;
-			pOverlayInfo->overlayHeaderList[i].bitmap_size = pBitMapInfo->size;
-
-			loge("blk_%d[%d], start_mb[%d,%d], end_mb[%d,%d],extra_alpha_flag:%d, extra_alpha:%d\n",
-								i,
-								time_id_list[i],
-								pOverlayInfo->overlayHeaderList[i].start_mb_x,
-								pOverlayInfo->overlayHeaderList[i].start_mb_y,
-								pOverlayInfo->overlayHeaderList[i].end_mb_x,
-								pOverlayInfo->overlayHeaderList[i].end_mb_y,
-								pOverlayInfo->overlayHeaderList[i].extra_alpha_flag,
-								pOverlayInfo->overlayHeaderList[i].extra_alpha);
-			loge("overlay_type:%d, cover_yuv[%d,%d,%d], overlay_blk_addr:%p, bitmap_size:%d\n",
-								pOverlayInfo->overlayHeaderList[i].overlay_type,
-								pOverlayInfo->overlayHeaderList[i].cover_yuv.cover_y,
-								pOverlayInfo->overlayHeaderList[i].cover_yuv.cover_u,
-								pOverlayInfo->overlayHeaderList[i].cover_yuv.cover_v,
-								pOverlayInfo->overlayHeaderList[i].overlay_blk_addr,
-								pOverlayInfo->overlayHeaderList[i].bitmap_size);
-			//if(i != 5)
-			{
-				start_mb_x += pBitMapInfo->width_aligh16 / 16;
-				start_mb_y += pBitMapInfo->height_aligh16 / 16;
-			}
-		}
-
-	return;
-}
-#endif
-
 static void init_h265_gop(VencH265GopStruct *h265Gop)
 {
 	h265Gop->gop_size = 8;
@@ -529,17 +297,79 @@ static void init_h265_gop(VencH265GopStruct *h265Gop)
 	//1:user config the reference info; 0:encoder config the reference info
 	h265Gop->custom_rps_flag = 0;
 }
-
-#if (ISP_VERSION != 600 && ISP_VERSION != 603)
-static void init_mb_mode(VencMBModeCtrl *pMBMode, encode_param_t *encode_param)
+typedef struct {
+	VencQpMapParcel     sQpMap;
+	VencModeMapParcel   sModeMap;
+	VencSplitMapParcel  sSplitMap;
+	VencLambdaMapParcel sLambdaMap;
+} H265AllMapParcel;
+static void init_mb_mode(VencMBModeCtrl *pMBMode, VENC_CODEC_TYPE eCodecType,
+	unsigned int dst_width, unsigned int dst_height)
 {
-	unsigned int mb_num;
+	unsigned int nMbWidth, nMbHeight, nMbNum, nInfoLen, nMbIdx;
 
-	mb_num = (ALIGN_XXB(16, encode_param->dst_width) >> 4) * (ALIGN_XXB(16, encode_param->dst_height) >> 4);
-	pMBMode->p_info = malloc(sizeof(VencMBModeCtrlInfo) * mb_num);
-	pMBMode->mode_ctrl_en = 1;
+	if (eCodecType == VENC_CODEC_H265) {
+		H265AllMapParcel *pMap = NULL;
+		H265AllMapParcel sMap = {0};
+
+		sMap.sQpMap.sMbMap[0].nDeltaQp = 6;
+		sMap.sQpMap.sMbMap[0].bNegQpEn = 1;
+		sMap.sQpMap.sMbMap[0].bSkipEn =  0;
+		sMap.sQpMap.sMbMap[0].bMapEn =   1;
+		memcpy(&sMap.sQpMap.sMbMap[1], &sMap.sQpMap.sMbMap[0], sizeof(VencMbQpMapParcel));
+		memcpy(&sMap.sQpMap.sMbMap[2], &sMap.sQpMap.sMbMap[0], sizeof(VencMbQpMapParcel));
+		memcpy(&sMap.sQpMap.sMbMap[3], &sMap.sQpMap.sMbMap[0], sizeof(VencMbQpMapParcel));
+
+		sMap.sModeMap.nBestMvComBias =   63; // MvCombineCost *= (nBestMvComBias / 128)
+		sMap.sModeMap.bBestMvComEn =     1;
+		sMap.sModeMap.bSaoDis =          0;
+		sMap.sModeMap.nInterBias =       63;  // InterCost *= (nInterBias / 128);
+		sMap.sModeMap.bInterBiasEn =     1;
+
+		sMap.sSplitMap.nInter16Factor =  63; // (Inter8Cost *= nInter16Factor * 128)
+		sMap.sSplitMap.nInter32Factor =  0;  // (Inter16Cost *= nInter32Factor * 128)
+		sMap.sSplitMap.bInterFactorEn =  1;
+		sMap.sSplitMap.nIntra8Factor =   63; // (Intra4Cost *= nIntra8Factor * 128)
+		sMap.sSplitMap.nIntra16Factor =  0;  // (Intra8Cost *= nIntra16Factor * 128)
+		sMap.sSplitMap.nIntra32Factor =  0;  // (Intra16Cost *= nIntra32Factor * 128)
+		sMap.sSplitMap.bIntraFactorEn =  1;
+
+		sMap.sLambdaMap.nFactor =        16; // Lambda *= (nFactor / 16)
+		sMap.sLambdaMap.nSaoFactor =     16; // SaoLambda *= (nSaoFacotr / 16)
+		sMap.sLambdaMap.nSqrtFactor =    16; // nSqrtLambda *= (nSqrtFactor / 16)
+		sMap.sLambdaMap.nImeFactor =     16; // nImeLambda *= (nImeFactor / 16)
+
+		nMbWidth = ALIGN_XXB(32, dst_width) >> 5;
+		nMbHeight = ALIGN_XXB(32, dst_height) >> 5;
+		nMbNum = nMbWidth * nMbHeight;
+		nInfoLen = nMbNum * 16;
+		pMBMode->p_info = (unsigned char *)MALLOC(nInfoLen);
+		pMBMode->mode_ctrl_en = 0x0F;
+		pMap = (H265AllMapParcel *)pMBMode->p_info;
+		for (nMbIdx = 0; nMbIdx < nMbNum; nMbIdx++) {
+			memcpy(&pMap[nMbIdx], &sMap, sizeof(H265AllMapParcel));
+		}
+	} else {
+		VencMbQpMapParcel *pMap = NULL;
+		VencMbQpMapParcel sMap = {0};
+
+		sMap.nDeltaQp = 6;
+		sMap.bNegQpEn = 1;
+		sMap.bSkipEn =  0;
+		sMap.bMapEn =   1;
+
+		nMbWidth = ALIGN_XXB(32, dst_width) >> 4;
+		nMbHeight = ALIGN_XXB(16, dst_height) >> 4;
+		nMbNum = nMbWidth * nMbHeight;
+		nInfoLen = nMbNum;
+		pMBMode->p_info = (unsigned char *)MALLOC(nInfoLen);
+		pMBMode->mode_ctrl_en = 0x01;
+		pMap = (VencMbQpMapParcel *)pMBMode->p_info;
+		for (nMbIdx = 0; nMbIdx < nMbNum; nMbIdx++) {
+			memcpy(&pMap[nMbIdx], &sMap, sizeof(VencMbQpMapParcel));
+		}
+	}
 }
-#endif
 
 static void init_mb_info(VencMBInfo *MBInfo, encode_param_t *encode_param)
 {
@@ -553,39 +383,27 @@ static void init_mb_info(VencMBInfo *MBInfo, encode_param_t *encode_param)
 		MBInfo->num_mb = (ALIGN_XXB(16, encode_param->dst_width) *
 							ALIGN_XXB(16, encode_param->dst_height)) >> 8;
 	}
-	MBInfo->p_para = (VencMBInfoPara *)malloc(sizeof(VencMBInfoPara) * MBInfo->num_mb);
+	MBInfo->p_para = (VencMBInfoPara *)MALLOC(sizeof(VencMBInfoPara) * MBInfo->num_mb);
 	if(MBInfo->p_para == NULL)
 	{
-		loge("malloc MBInfo->p_para error");
+		loge("MALLOC MBInfo->p_para error\n");
 		return;
 	}
 }
 
 static void init_fix_qp(VencFixQP *fixQP)
 {
-	fixQP->bEnable = vencoder_tuning_param->QPcontrol_cfg.FixQPEn;
-	fixQP->nIQp = vencoder_tuning_param->QPcontrol_cfg.Fix_I_Qp;
-	fixQP->nPQp = vencoder_tuning_param->QPcontrol_cfg.Fix_P_Qp;
-	if (!fixQP->nIQp || !fixQP->nPQp)
-		fixQP->bEnable = 0;
-
+	fixQP->bEnable = 1;
+	fixQP->nIQp = 35;
+	fixQP->nPQp = 35;
 	loge("----------init_fix_qp:fix-qp, Enable=%d, I=%d, P=%d", fixQP->bEnable, fixQP->nIQp, fixQP->nPQp);
 }
 
-static void init_super_frame_cfg(VencSuperFrameConfig *sSuperFrameCfg, encode_param_t *encode_param)
+void init_super_frame_cfg(VencSuperFrameConfig *sSuperFrameCfg)
 {
-	if(encode_param->MaxReEncodeTimes > 0) {
-		sSuperFrameCfg->eSuperFrameMode = vencoder_tuning_param->super_frame_cfg.super_frm_mode;
-		sSuperFrameCfg->nMaxIFrameBits = vencoder_tuning_param->super_frame_cfg.super_i_frm_bits;
-		sSuperFrameCfg->nMaxPFrameBits = vencoder_tuning_param->super_frame_cfg.super_p_frm_bits;
-	} else {
-		sSuperFrameCfg->eSuperFrameMode = VENC_SUPERFRAME_NONE;
-		sSuperFrameCfg->nMaxIFrameBits = 30000*8;
-		sSuperFrameCfg->nMaxPFrameBits = 15000*8;
-	}
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-	sSuperFrameCfg->nMaxRencodeTimes = encode_param->MaxReEncodeTimes;
-#endif
+	sSuperFrameCfg->eSuperFrameMode = VENC_SUPERFRAME_NONE;
+	sSuperFrameCfg->nMaxIFrameBits = 30000*8;
+	sSuperFrameCfg->nMaxPFrameBits = 15000*8;
 }
 
 static void init_svc_skip(VencH264SVCSkip *SVCSkip)
@@ -690,90 +508,156 @@ static void init_alter_frame_rate_info(VencAlterFrameRateInfo *pAlterFrameRateIn
 	pAlterFrameRateInfo->roi_param[1].sRect.nHeight = 320;
 }
 
-static void init_enc_proc_info(VeProcSet *ve_proc_set)
+void init_enc_proc_info(VeProcSet *ve_proc_set)
 {
-	ve_proc_set->bProcEnable = vencoder_tuning_param->proc_cfg.ProcEnable;
-	ve_proc_set->nProcFreq = vencoder_tuning_param->proc_cfg.ProcFreq;
-	ve_proc_set->nStatisBitRateTime = vencoder_tuning_param->proc_cfg.StatisBitRateTime;
-	ve_proc_set->nStatisFrRateTime = vencoder_tuning_param->proc_cfg.StatisFrmRateTime;
+	ve_proc_set->bProcEnable = 0;
+	ve_proc_set->nProcFreq = 3;
 }
 
-static int initH264Func(h264_func_t *h264_func, encode_param_t *encode_param)
+static void print_encode_param(const encode_param_t *param) {
+	if (!param) {
+		printf("Error: NULL pointer provided!\n");
+		return;
+	}
+
+	printf("===== Encode Parameter Dump =====\n");
+
+	printf("src_width:         %u\n", param->src_width);
+	printf("src_height:        %u\n", param->src_height);
+	printf("dst_width:         %u\n", param->dst_width);
+	printf("dst_height:        %u\n", param->dst_height);
+
+	printf("encode_frame_num:  %u\n", param->encode_frame_num);
+	printf("encode_format:     %u\n", param->encode_format);
+	printf("bit_rate:          %d bps\n", param->bit_rate);
+	printf("frame_rate:        %d fps\n", param->frame_rate);
+	printf("SbmBufSize:        %d\n", param->SbmBufSize);
+	printf("maxKeyFrame:       %d\n", param->maxKeyFrame);
+
+	printf("qp_min:            %u\n", param->qp_min);
+	printf("qp_max:            %u\n", param->qp_max);
+	printf("Pqp_min:           %u\n", param->Pqp_min);
+	printf("Pqp_max:           %u\n", param->Pqp_max);
+	printf("mInitQp:           %u\n", param->mInitQp);
+
+	printf("bFastEncFlag:      %d\n", param->bFastEncFlag);
+	printf("mbPintraEnable:    %d\n", param->mbPintraEnable);
+	printf("n3DNR:             %d\n", param->n3DNR);
+	printf("mirror:            %u\n", param->mirror);
+	printf("gray:              %u\n", param->gray);
+	printf("Rotate:            %d\n", param->Rotate);
+	printf("MaxReEncodeTimes:  %d\n", param->MaxReEncodeTimes);
+
+	#ifdef INPUTSOURCE_FILE
+	printf("src_size:          %u\n", param->src_size);
+	printf("dts_size:          %u\n", param->dts_size);
+	printf("in_file:           %p\n", (void*)param->in_file);
+	printf("out_file:          %p\n", (void*)param->out_file);
+	printf("input_path:        '%s'\n", param->input_path);
+	printf("output_path:       '%s'\n", param->output_path);
+	#endif
+
+	printf("bLbcLossyComEnFlag1_5x: %u\n", param->bLbcLossyComEnFlag1_5x);
+	printf("bLbcLossyComEnFlag2x:   %u\n", param->bLbcLossyComEnFlag2x);
+	printf("bLbcLossyComEnFlag2_5x: %u\n", param->bLbcLossyComEnFlag2_5x);
+	printf("bEnableGetWbYuv:        %u\n", param->bEnableGetWbYuv);
+	printf("eColorSpace:            %u\n", param->eColorSpace);
+	printf("bColorSpaceFullFlag:    %u\n", param->bColorSpaceFullFlag);
+	printf("debug_gdc_en:           %u\n", param->debug_gdc_en);
+
+	printf("\n----- Skipped Function Pointers -----\n");
+	printf("jpeg_func:        [Function pointer]\n");
+	printf("h264_func:        [Function pointer]\n");
+	printf("h265_func:        [Function pointer]\n");
+
+	printf("\n----- Skipped Structures -----\n");
+	#ifdef INPUTSOURCE_FILE
+	printf("bufferParam:      [Struct VencAllocateBufferParam]\n");
+	#endif
+	printf("inputBuffer:      [Struct VencInputBuffer]\n");
+	printf("outputBuffer:     [Struct VencOutputBuffer]\n");
+	printf("sps_pps_data:     [Struct VencHeaderData]\n");
+	printf("picture_format:   [Enum VENC_PIXEL_FMT] Value: %u\n", (unsigned int)param->picture_format);
+
+	printf("====================================\n");
+}
+
+int initH264Func(encode_param_t *encode_param)
 {
-	memset(h264_func, 0, sizeof(h264_func_t));
-
-	loge("H264_para:bit_rate=%d, dst_height=%u, dst_width=%u, encode_format=%u, \
-		encode_frame_num=%u, frame_rate=%d, maxKeyFrame=%d, picture_format=%d, qp_max=%u, \
-		qp_min=%u, src_height=%u, src_width=%u",\
-		encode_param->bit_rate, encode_param->dst_height,\
-		encode_param->dst_width, encode_param->encode_format, encode_param->encode_frame_num, \
-		encode_param->frame_rate, encode_param->maxKeyFrame, encode_param->picture_format,\
-		encode_param->qp_max, encode_param->qp_min, encode_param->src_height, \
-		encode_param->src_width);
-
-	//init h264Param
+    h264_func_t *h264_func = &encode_param->h264_func;
+	print_encode_param(encode_param);
+    //init h264Param
 	h264_func->h264Param.bEntropyCodingCABAC = 1;
 	h264_func->h264Param.nBitrate = encode_param->bit_rate;
 	h264_func->h264Param.nFramerate = encode_param->frame_rate;
 	h264_func->h264Param.nCodingMode = VENC_FRAME_CODING;
-	h264_func->h264Param.nMaxKeyInterval = encode_param->maxKeyFrame;
-
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-	if (vencoder_tuning_param->base_cfg.Profile == 0)
-		h264_func->h264Param.sProfileLevel.nProfile = VENC_H264ProfileBaseline;
-	else if (vencoder_tuning_param->base_cfg.Profile == 1)
-		h264_func->h264Param.sProfileLevel.nProfile = VENC_H264ProfileMain;
+	/*
+	if (encode_param->nProfile != 0)
+		h264_func->h264Param.sProfileLevel.nProfile = encode_param->nProfile;
 	else
-		h264_func->h264Param.sProfileLevel.nProfile = VENC_H264ProfileHigh;
-	h264_func->h264Param.sProfileLevel.nLevel = vencoder_tuning_param->base_cfg.Level;
-#else
+	*/
 	h264_func->h264Param.sProfileLevel.nProfile = VENC_H264ProfileHigh;
+	/*
+	if (encode_param->nLevel != 0)
+		h264_func->h264Param.sProfileLevel.nLevel = encode_param->nLevel;
+	else
+	*/
 	h264_func->h264Param.sProfileLevel.nLevel = VENC_H264Level51;
-#endif
-	//default is CBR
-	h264_func->h264Param.sRcParam.eRcMode = vencoder_tuning_param->base_cfg.RCMode;
-	if (h264_func->h264Param.sRcParam.eRcMode) {
-		h264_func->h264Param.sRcParam.sVbrParam.uMaxBitRate = encode_param->bit_rate;
-	    h264_func->h264Param.sRcParam.sVbrParam.nMovingTh = 20;
-	    h264_func->h264Param.sRcParam.sVbrParam.nQuality = vencoder_tuning_param->vbr_cfg.mQuality ? vencoder_tuning_param->vbr_cfg.mQuality : 10;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-		h264_func->h264Param.sRcParam.sVbrParam.nIFrmBitsCoef = vencoder_tuning_param->vbr_cfg.mIFrmBitsCoef ? vencoder_tuning_param->vbr_cfg.mIFrmBitsCoef : 10;
-		h264_func->h264Param.sRcParam.sVbrParam.nPFrmBitsCoef = vencoder_tuning_param->vbr_cfg.mPFrmBitsCoef ? vencoder_tuning_param->vbr_cfg.mPFrmBitsCoef : 10;
-#endif
+
+	loge("nProfile %d nLevel %d", h264_func->h264Param.sProfileLevel.nProfile, h264_func->h264Param.sProfileLevel.nLevel);
+
+	if(h264_func->h264Param.nMaxKeyInterval == 0)
+	{
+		h264_func->h264Param.nMaxKeyInterval = 30;
 	}
 
-	if (encode_param->qp_min > 0 && encode_param->qp_max && encode_param->qp_max > encode_param->qp_min) {
+	if(0 < encode_param->qp_min && encode_param->qp_max < 52
+		&& encode_param->qp_min < encode_param->qp_max)
+	{
 		h264_func->h264Param.sQPRange.nMinqp = encode_param->qp_min;
 		h264_func->h264Param.sQPRange.nMaxqp = encode_param->qp_max;
-	} else {
+
+	}
+	else
+	{
 		h264_func->h264Param.sQPRange.nMinqp = 10;
 		h264_func->h264Param.sQPRange.nMaxqp = 50;
 	}
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-	h264_func->h264Param.sQPRange.nQpInit = encode_param->mInitQp;
-	if (encode_param->Pqp_min && encode_param->Pqp_max && encode_param->Pqp_max > encode_param->Pqp_min) {
+
+	if(0 < encode_param->Pqp_min && encode_param->Pqp_max < 52
+		&& encode_param->Pqp_min < encode_param->Pqp_max)
+	{
 		h264_func->h264Param.sQPRange.nMinPqp = encode_param->Pqp_min;
 		h264_func->h264Param.sQPRange.nMaxPqp = encode_param->Pqp_max;
-	} else {
+
+	}
+	else
+	{
 		h264_func->h264Param.sQPRange.nMinPqp = 10;
 		h264_func->h264Param.sQPRange.nMaxPqp = 50;
 	}
-	h264_func->h264Param.sQPRange.bEnMbQpLimit = vencoder_tuning_param->QPcontrol_cfg.MbQPLimitEn;
-#endif
+
+	if(0 < encode_param->mInitQp && encode_param->mInitQp < 52)
+	{
+		h264_func->h264Param.sQPRange.nQpInit = encode_param->mInitQp;
+	}
+	else
+	{
+		h264_func->h264Param.sQPRange.nQpInit = 30;
+	}
 
 	//h264_func->h264Param.bLongRefEnable = 1;
 	//h264_func->h264Param.nLongRefPoc = 0;
 
+#if 0
 	h264_func->sH264Smart.img_bin_en = 1;
 	h264_func->sH264Smart.img_bin_th = 27;
 	h264_func->sH264Smart.shift_bits = 2;
 	h264_func->sH264Smart.smart_fun_en = 1;
-
-	//以下函数都是在填充h264_func里面的结构体成员
-#if (ISP_VERSION != 600 && ISP_VERSION != 603)
-	//init VencMBModeCtrl
-	init_mb_mode(&h264_func->h264MBMode, encode_param);
 #endif
+
+	//init VencMBModeCtrl
+	init_mb_mode(&h264_func->h264MBMode, encode_param->encode_format, encode_param->dst_width, encode_param->dst_height);
 
 	//init VencMBInfo
 	init_mb_info(&h264_func->MBInfo, encode_param);
@@ -782,7 +666,7 @@ static int initH264Func(h264_func_t *h264_func, encode_param_t *encode_param)
 	init_fix_qp(&h264_func->fixQP);
 
 	//init VencSuperFrameConfig
-	init_super_frame_cfg(&h264_func->sSuperFrameCfg, encode_param);
+	init_super_frame_cfg(&h264_func->sSuperFrameCfg);
 
 	//init VencH264SVCSkip
 	init_svc_skip(&h264_func->SVCSkip);
@@ -803,10 +687,11 @@ static int initH264Func(h264_func_t *h264_func, encode_param_t *encode_param)
 	init_enc_proc_info(&h264_func->sVeProcInfo);
 
 	//init VencOverlayConfig
-    //init_overlay_info(&h264_func->sOverlayInfo, encode_param);
+	// init_overlay_info(&h264_func->sOverlayInfo, encode_param);
 
-	return VIDEOCODEC_OK;
+	return 0;
 }
+
 
 int initH265Func(h265_func_t *h265_func, encode_param_t *encode_param)
 {
@@ -815,7 +700,7 @@ int initH265Func(h265_func_t *h265_func, encode_param_t *encode_param)
 	//init h265Param
 	h265_func->h265Param.nBitrate = encode_param->bit_rate;
 	h265_func->h265Param.nFramerate = encode_param->frame_rate;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+
 	if (vencoder_tuning_param->base_cfg.Profile == 0)
 		h265_func->h265Param.sProfileLevel.nProfile = VENC_H265ProfileMain;
 	else if (vencoder_tuning_param->base_cfg.Profile == 1)
@@ -823,10 +708,7 @@ int initH265Func(h265_func_t *h265_func, encode_param_t *encode_param)
 	else
 		h265_func->h265Param.sProfileLevel.nProfile = VENC_H265ProfileMainStill;
 	h265_func->h265Param.sProfileLevel.nLevel = vencoder_tuning_param->base_cfg.Level;
-#else
-	h265_func->h265Param.sProfileLevel.nProfile = VENC_H265ProfileMain;
-	h265_func->h265Param.sProfileLevel.nLevel = VENC_H265Level41;
-#endif
+
 	h265_func->h265Param.nQPInit = 30;
 	h265_func->h265Param.idr_period = encode_param->maxKeyFrame;
 	h265_func->h265Param.nGopSize = h265_func->h265Param.idr_period;
@@ -839,10 +721,8 @@ int initH265Func(h265_func_t *h265_func, encode_param_t *encode_param)
 		h265_func->h265Param.sRcParam.sVbrParam.uMaxBitRate = encode_param->bit_rate;
 	    h265_func->h265Param.sRcParam.sVbrParam.nMovingTh = 20;
 	    h265_func->h265Param.sRcParam.sVbrParam.nQuality = vencoder_tuning_param->vbr_cfg.mQuality ? vencoder_tuning_param->vbr_cfg.mQuality : 10;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 		h265_func->h265Param.sRcParam.sVbrParam.nIFrmBitsCoef = vencoder_tuning_param->vbr_cfg.mIFrmBitsCoef ? vencoder_tuning_param->vbr_cfg.mIFrmBitsCoef : 10;
 		h265_func->h265Param.sRcParam.sVbrParam.nPFrmBitsCoef = vencoder_tuning_param->vbr_cfg.mPFrmBitsCoef ? vencoder_tuning_param->vbr_cfg.mPFrmBitsCoef : 10;
-#endif
 	}
 
 	if (encode_param->qp_min > 0 && encode_param->qp_max && encode_param->qp_max > encode_param->qp_min) {
@@ -852,7 +732,7 @@ int initH265Func(h265_func_t *h265_func, encode_param_t *encode_param)
 		h265_func->h265Param.sQPRange.nMinqp = 10;
 		h265_func->h265Param.sQPRange.nMaxqp = 50;
 	}
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+
 	h265_func->h265Param.sQPRange.nQpInit = encode_param->mInitQp;
 	if (encode_param->Pqp_min && encode_param->Pqp_max && encode_param->Pqp_max > encode_param->Pqp_min) {
 		h265_func->h265Param.sQPRange.nMinPqp = encode_param->Pqp_min;
@@ -862,7 +742,6 @@ int initH265Func(h265_func_t *h265_func, encode_param_t *encode_param)
 		h265_func->h265Param.sQPRange.nMaxPqp = 50;
 	}
 	h265_func->h265Param.sQPRange.bEnMbQpLimit = vencoder_tuning_param->QPcontrol_cfg.MbQPLimitEn;
-#endif
 
 	//h265_func->h265Param.bLongTermRef = 1;
 	h265_func->h265Hvs.hvs_en = 1;
@@ -883,11 +762,6 @@ int initH265Func(h265_func_t *h265_func, encode_param_t *encode_param)
 	//init H265Gop
 	init_h265_gop(&h265_func->h265Gop);
 
-#if (ISP_VERSION != 600 && ISP_VERSION != 603)
-	//init VencMBModeCtrl
-	init_mb_mode(&h265_func->h265MBMode, encode_param);
-#endif
-
 	//init VencMBInfo
 	init_mb_info(&h265_func->MBInfo, encode_param);
 
@@ -895,7 +769,7 @@ int initH265Func(h265_func_t *h265_func, encode_param_t *encode_param)
 	init_fix_qp(&h265_func->fixQP);
 
 	//init VencSuperFrameConfig
-	init_super_frame_cfg(&h265_func->sSuperFrameCfg, encode_param);
+	init_super_frame_cfg(&h265_func->sSuperFrameCfg);
 
 	//init VencH264SVCSkip
 	init_svc_skip(&h265_func->SVCSkip);
@@ -952,7 +826,6 @@ int initJpegFunc(jpeg_func_t *jpeg_func, encode_param_t *encode_param)
 
 }
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 static int initGdcFunc(sGdcParam *pGdcParam)
 {
     pGdcParam->bGDC_en = 1;
@@ -1031,389 +904,261 @@ static int initGdcFunc(sGdcParam *pGdcParam)
 
     return 0;
 }
-#endif
 
-static int setEncParam(VideoEncoder *pVideoEnc ,encode_param_t *encode_param)
+static int setEncParam(VideoEncoder *pVideoEnc ,encode_param_t *encode_param, VencBaseConfig *pbaseConfig)
 {
-	int result = 0;
-	VeProcSet mProcSet;
-	//mProcSet.bProcEnable = 1;
-	//mProcSet.nProcFreq = 30;
-	//mProcSet.nStatisBitRateTime = 1000;
-	//mProcSet.nStatisFrRateTime  = 1000;
-
-	mProcSet.bProcEnable = vencoder_tuning_param->proc_cfg.ProcEnable;
-	mProcSet.nProcFreq = vencoder_tuning_param->proc_cfg.ProcFreq;
-	mProcSet.nStatisBitRateTime = vencoder_tuning_param->proc_cfg.StatisBitRateTime;
-	mProcSet.nStatisFrRateTime  = 1000;
+    int result = 0;
 	unsigned int vbv_size, value;
-	float value_f;
 
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProcSet, &mProcSet);
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamChmoraGray, &encode_param->gray);
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamHorizonFlip, &encode_param->mirror);
-	if(encode_param->bFastEncFlag > 0) {
-	    loge("++++++++++++++fastenc\n");
-	    value = 1;
-	    VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamFastEnc, &value);
-	}
-	if(encode_param->Rotate > 0) {
-		loge("++++++++++++++Rotate=%d\n", encode_param->Rotate);
-		value = (encode_param->Rotate%4)*90;
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamRotation, &value);
-	}
-	if(encode_param->mbPintraEnable > 0) {
-		loge("++++++++++++++mbPintraEnable\n");
-		value = 1;
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamPFrameIntraEn, &value);
-	}
+    VeProcSet mProcSet;
+    mProcSet.bProcEnable = 1;
+    mProcSet.nProcFreq = 30;
+    mProcSet.nStatisBitRateTime = 1000;
+    mProcSet.nStatisFrRateTime  = 1000;
+    VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProcSet, &mProcSet);
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-	value = vencoder_tuning_param->base_cfg.ProduceMode;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProductCase, &value);
-	value = 1;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSensorType, &value);
+    VencH264VideoSignal mVencVideoSignal;
+    memset(&mVencVideoSignal, 0, sizeof(VencH264VideoSignal));
+    mVencVideoSignal.video_format = DEFAULT;
+	mVencVideoSignal.full_range_flag = encode_param->bColorSpaceFullFlag;
+    mVencVideoSignal.src_colour_primaries = encode_param->eColorSpace;
+    mVencVideoSignal.dst_colour_primaries = encode_param->eColorSpace;
+	loge("full_range_flag = %d, src_colour_primaries = %d, dst_colour_primaries = %d", mVencVideoSignal.full_range_flag, mVencVideoSignal.src_colour_primaries, mVencVideoSignal.dst_colour_primaries);
+	value = 0;
+    VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIspbeEn, &value);
 
-	if (vencoder_tuning_param->base_cfg.DisReduceRecRef)
-		value = 0;
-	else
-		value = 1;
-	loge("++++++++++++++DisReduceRecRef=%d\n", value);
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnableRecRefBufReduceFunc, &value);
-
-	value = vencoder_tuning_param->base_cfg.ChromeQpOffset;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamChromaQPOffset, &value);
-	value = vencoder_tuning_param->base_cfg.RecRefLbcMode;
-	if (value > 0) {
-		loge("++++++++++++++rec_ref_lbc_mode=%d\n", value);
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetRecRefLbcMode, &value);
-	}
-
-	value = vencoder_tuning_param->base_cfg.SmallSearchEn;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnSmallSearchRange, &value);
-
-	value = vencoder_tuning_param->special_cfg.d3d_in_i_frm_en;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnD3DInIFrm, &value);
-
-	value = vencoder_tuning_param->special_cfg.i_frm_mb_rc_min_status;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnIFrmMbRcMoveStatus, &value);
-
-	value = vencoder_tuning_param->special_cfg.tight_mb_qp_en;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnTightMbQp, &value);
-
-	value_f = vencoder_tuning_param->special_cfg.weak_text_th;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamWeakTextTh, &value_f);
-
-	VencVe2IspD2DLimit Ve2IspD2DLimit;
-	Ve2IspD2DLimit.en_d2d_limit = vencoder_tuning_param->ve2isp_cfg.d2d_limit_en;
-	if (Ve2IspD2DLimit.en_d2d_limit > 0) {
-		Ve2IspD2DLimit.d2d_level[0] = vencoder_tuning_param->ve2isp_cfg.d2d_level[0];
-		Ve2IspD2DLimit.d2d_level[1] = vencoder_tuning_param->ve2isp_cfg.d2d_level[1];
-		Ve2IspD2DLimit.d2d_level[2] = vencoder_tuning_param->ve2isp_cfg.d2d_level[2];
-		Ve2IspD2DLimit.d2d_level[3] = vencoder_tuning_param->ve2isp_cfg.d2d_level[3];
-		Ve2IspD2DLimit.d2d_level[4] = vencoder_tuning_param->ve2isp_cfg.d2d_level[4];
-		Ve2IspD2DLimit.d2d_level[5] = vencoder_tuning_param->ve2isp_cfg.d2d_level[5];
-	}
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamVe2IspD2DLimit, &Ve2IspD2DLimit);
-
-	EncoderSetParamColorSpace(encode_param, encode_param->eColorSpace, encode_param->bColorSpaceFullFlag);
-
-	VencSuperFrameConfig SuperFrameConfig;
-	//float cmp_ratio = 1.5 * 1024 * 1024 / 20;
-	//float dst_bit = (float)encode_param->bit_rate / encode_param->frame_rate;
-	//float bits_ratio = dst_bit / cmp_ratio;
-	//SuperFrameConfig.eSuperFrameMode = VENC_SUPERFRAME_NONE;
-	//SuperFrameConfig.nMaxIFrameBits = (unsigned int) (bits_ratio * 8 * 250 * 1024);
-	//SuperFrameConfig.nMaxPFrameBits = SuperFrameConfig.nMaxIFrameBits / 3;
-	SuperFrameConfig.eSuperFrameMode = vencoder_tuning_param->super_frame_cfg.super_frm_mode;
-	SuperFrameConfig.nMaxIFrameBits = vencoder_tuning_param->super_frame_cfg.super_i_frm_bits;
-	SuperFrameConfig.nMaxPFrameBits = vencoder_tuning_param->super_frame_cfg.super_p_frm_bits;
-	SuperFrameConfig.nMaxRencodeTimes = vencoder_tuning_param->super_frame_cfg.MaxReEncodeTimes;
-	SuperFrameConfig.nMaxP2IFrameBitsRatio = vencoder_tuning_param->super_frame_cfg.p2i_ratio;
-	EncoderSetParamSuperFrame(encode_param, &SuperFrameConfig);
-	printf("EncoderSetParamSuperFrame ---- %d  %d\n", SuperFrameConfig.nMaxIFrameBits, SuperFrameConfig.nMaxPFrameBits);
-
-	if (encode_param->debug_gdc_en) {
-	    sGdcParam mGdcParam;
-	    memset(&mGdcParam, 0, sizeof(sGdcParam));
-	    initGdcFunc(&mGdcParam);
-	    VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamGdcConfig, &mGdcParam);
-	}
-#endif
-
-	if(encode_param->encode_format == VENC_CODEC_JPEG) {
-		result = initJpegFunc(&encode_param->jpeg_func, encode_param);
-		if(result) {
-			loge("initJpegFunc error, return \n");
-			return -1;
+	value = 0;
+    VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIspbeEmbedEn, &value);
+/*
+    if(encode_param->gdc_en == 1)
+    {
+        sInputPara mGdcParam;
+        memset(&mGdcParam, 0, sizeof(sInputPara));
+        initGdcFunc(&mGdcParam, encode_param);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamGdcConfig, &mGdcParam);
+    }
+*/
+    if(encode_param->encode_format == VENC_CODEC_JPEG)
+    {
+        result = initJpegFunc(&encode_param->jpeg_func, encode_param);
+        if(result)
+        {
+            loge("initJpegFunc error, return \n");
+            return -1;
         }
-
-		if(1 == encode_param->jpeg_func.jpeg_mode) {
-            unsigned int vbv_size = 4*1024*1024;
-			if(encode_param->SbmBufSize > 0) {
-				vbv_size = encode_param->SbmBufSize;
-			}
-            VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetVbvSize, &vbv_size);
+        unsigned int vbv_size = 2 * encode_param->dst_width * encode_param->dst_height;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetVbvSize, &vbv_size);
+        if(1 == encode_param->jpeg_func.jpeg_mode)
+        {
             VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamJpegEncMode, &encode_param->jpeg_func.jpeg_mode);
             VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamBitrate, &encode_param->jpeg_func.jpeg_biteRate);
             VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamFramerate, &encode_param->jpeg_func.jpeg_frameRate);
-            VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetBitRateRange, &encode_param->jpeg_func.bitRateRange);
-        } else {
-			unsigned int vbv_size = 4*1024*1024;
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetVbvSize, &vbv_size);
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamJpegQuality, &encode_param->jpeg_func.quality);
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamJpegExifInfo, &encode_param->jpeg_func.exifinfo);
-		}
+            VideoEncSetParameterDl(pVideoEnc,
+                                    VENC_IndexParamSetBitRateRange, &encode_param->jpeg_func.bitRateRange);
 
-        if(encode_param->jpeg_func.pRoiConfig.bEnable == 1) {
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamRoi, &encode_param->jpeg_func.pRoiConfig);
-		}
-#if 0
-		if(encode_param->test_overlay_flag == 1)
-		{
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetOverlay, &encode_param->jpeg_func.sOverlayInfo);
-		}
+        }
+        else
+        {
+            VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamJpegQuality, &encode_param->jpeg_func.quality);
+            VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamJpegExifInfo, &encode_param->jpeg_func.exifinfo);
+        }
+
+        if(encode_param->jpeg_func.pRoiConfig.bEnable == 1)
+        {
+            VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamRoi, &encode_param->jpeg_func.pRoiConfig);
+        }
+
+        if(/*encode_param->test_overlay_flag == 1*/ 0)
+        {
+            VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetOverlay, &encode_param->jpeg_func.sOverlayInfo);
+        }
+    }
+    else if(encode_param->encode_format == VENC_CODEC_H264)
+    {
+        result = initH264Func(encode_param);
+        if(result)
+        {
+            loge("initH264Func error, return \n");
+            return -1;
+        }
+		value = 0;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProductCase, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIsNightCaseFlag, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSensorType, &value);
+
+        unsigned int vbv_size = 12*1024*1024;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetVbvSize, &vbv_size);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264Param, &encode_param->h264_func.h264Param);
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264FixQP, &h264_func.fixQP);
+		/*
+        if(encode_param->test_overlay_flag == 1)
+        {
+            VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetOverlay, &encode_param->h264_func.sOverlayInfo);
+        }
+		*/
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProcSet, &encode_param->h264_func.sVeProcInfo);
+
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264VideoSignal, &mVencVideoSignal);
+
+        //int tmptmp = 60;
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamVirtualIFrame, &tmptmp);
+
+#ifdef GET_MB_INFO
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamMBInfoOutput, &encode_param->h264_func.MBInfo);
 #endif
-    } else if(encode_param->encode_format == VENC_CODEC_H264) {
-		result = initH264Func(&encode_param->h264_func, encode_param);
-		if(result) {
-			loge("initH264Func error, return \n");
-			return VIDEOCODEC_FAIL;
-		}
 
-		if(encode_param->SbmBufSize > 0) {
-			vbv_size = encode_param->SbmBufSize;
-		} else {
-			vbv_size = VBV_TOTAL_SIZE;
-		}
+/*
+    if (encode_param->rotate_value)
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamRotation, &encode_param->rotate_value);
+    if (encode_param->hflip)
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamHorizonFlip, &encode_param->hflip);
+    if (encode_param->wbyuv_info.bEnableWbYuv)
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamWbYuv, &encode_param->wbyuv_info);
+    if (encode_param->mHwCrop.bEnCrop || encode_param->mHwCrop.bVirZoom) {//only support setting in init stage.
+        initHwCropInfo(&encode_param->mHwCrop, pbaseConfig);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamHwCropConfig, &encode_param->mHwCrop);
+    }
+*/
 
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264Param, &encode_param->h264_func.h264Param);
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetVbvSize, &vbv_size);
-
-		if(vencoder_tuning_param->savebsfile_cfg.Save_bsfile_flag > 0 &&
-			memcmp(vencoder_tuning_param->savebsfile_cfg.Filename, "\0", 1) != 0)//vencoder_tuning_param->savebsfile_cfg.Filename != "\0"
-		{
-			//sprintf(vencoder_tuning_param->savebsfile_cfg.Filename, "/tmp/test_1.dat");
-			VencSaveBSFile bs_file;
-			memcpy(bs_file.filename, vencoder_tuning_param->savebsfile_cfg.Filename, 256);
-			bs_file.save_bsfile_flag = 1;
-			bs_file.save_start_time = vencoder_tuning_param->savebsfile_cfg.Save_start_time;
-			bs_file.save_end_time = vencoder_tuning_param->savebsfile_cfg.Save_end_time;
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSaveBSFile, &bs_file);
-		}
-
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-		VencH264ConstraintFlag H264ConstraintFlag;
-		H264ConstraintFlag.constraint_0 = vencoder_tuning_param->h264ConstraintFlag_cfg.h264_constraint_0;
-		H264ConstraintFlag.constraint_1 = vencoder_tuning_param->h264ConstraintFlag_cfg.h264_constraint_1;
-		H264ConstraintFlag.constraint_2 = vencoder_tuning_param->h264ConstraintFlag_cfg.h264_constraint_2;
-		H264ConstraintFlag.constraint_3 = vencoder_tuning_param->h264ConstraintFlag_cfg.h264_constraint_3;
-		H264ConstraintFlag.constraint_4 = vencoder_tuning_param->h264ConstraintFlag_cfg.h264_constraint_4;
-		H264ConstraintFlag.constraint_5 = vencoder_tuning_param->h264ConstraintFlag_cfg.h264_constraint_5;
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264ConstraintFlag, &H264ConstraintFlag);
-
-		VencIPTargetBitsRatio IPTargetBitsRatio;
-		IPTargetBitsRatio.nSceneCoef[0] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[0] / 100.0;
-		IPTargetBitsRatio.nSceneCoef[1] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[1] / 100.0;
-		IPTargetBitsRatio.nSceneCoef[2] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[2] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[0] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[0] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[1] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[1] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[2] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[2] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[3] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[3] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[4] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[4] / 100.0;
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIPTargetBitsRatio, &IPTargetBitsRatio);
-
-		VencTargetBitsClipParam TargetBitsClipParam;
-		TargetBitsClipParam.dis_default_para = vencoder_tuning_param->vbr_cfg.BitsClipDisDefault;
-		TargetBitsClipParam.mode = vencoder_tuning_param->vbr_cfg.BitsClipMode;
-		TargetBitsClipParam.coef_th[0][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[0][0] / 100.0;
-		TargetBitsClipParam.coef_th[0][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[0][1] / 100.0;
-		TargetBitsClipParam.coef_th[1][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[1][0] / 100.0;
-		TargetBitsClipParam.coef_th[1][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[1][1] / 100.0;
-		TargetBitsClipParam.coef_th[2][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[2][0] / 100.0;
-		TargetBitsClipParam.coef_th[2][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[2][1] / 100.0;
-		TargetBitsClipParam.coef_th[3][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[3][0] / 100.0;
-		TargetBitsClipParam.coef_th[3][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[3][1] / 100.0;
-		TargetBitsClipParam.coef_th[4][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[4][0] / 100.0;
-		TargetBitsClipParam.coef_th[4][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[4][1] / 100.0;
-		TargetBitsClipParam.en_gop_clip = vencoder_tuning_param->vbr_cfg.BitsClipGopRtEn;
-		TargetBitsClipParam.gop_bit_ratio_th[0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[0] / 100.0;
-		TargetBitsClipParam.gop_bit_ratio_th[1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[1] / 100.0;
-		TargetBitsClipParam.gop_bit_ratio_th[2] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[2] / 100.0;
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamTargetBitsClipParam, &TargetBitsClipParam);
-
-		VencMotionSearchParam MotionSearchParam;
-		MotionSearchParam.en_motion_search = vencoder_tuning_param->motion_search_cfg.motion_search_en;
-		if (MotionSearchParam.en_motion_search > 0) {
-#if (ISP_VERSION == 603)
-			MotionSearchParam.dis_default_para = vencoder_tuning_param->motion_search_cfg.dis_default_para;
-		    MotionSearchParam.hor_region_num = vencoder_tuning_param->motion_search_cfg.hor_region_num;
-    	    MotionSearchParam.ver_region_num = vencoder_tuning_param->motion_search_cfg.ver_region_num;
-            MotionSearchParam.en_check_mv = vencoder_tuning_param->motion_search_cfg.en_check_mv;
-            MotionSearchParam.en_check_mad = vencoder_tuning_param->motion_search_cfg.en_check_mad;
-            MotionSearchParam.en_morpholog = vencoder_tuning_param->motion_search_cfg.en_morpholog;
-		    MotionSearchParam.large_mv_th = vencoder_tuning_param->motion_search_cfg.large_mv_th;
-            MotionSearchParam.large_mad_th = vencoder_tuning_param->motion_search_cfg.large_mad_th;
-            MotionSearchParam.background_weight = vencoder_tuning_param->motion_search_cfg.background_weight;
-		    MotionSearchParam.large_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.large_mv_ratio_th;
-		    MotionSearchParam.non_zero_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.non_zero_mv_ratio_th;
-		    MotionSearchParam.large_mad_ratio_th = vencoder_tuning_param->motion_search_cfg.large_mad_ratio_th;
-#else
-			MotionSearchParam.dis_default_para = vencoder_tuning_param->motion_search_cfg.dis_default_para;
-			MotionSearchParam.hor_region_num = vencoder_tuning_param->motion_search_cfg.hor_region_num;
-			MotionSearchParam.ver_region_num = vencoder_tuning_param->motion_search_cfg.ver_region_num;
-			MotionSearchParam.large_mv_th = vencoder_tuning_param->motion_search_cfg.large_mv_th;
-			MotionSearchParam.large_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.large_mv_ratio_th;
-			MotionSearchParam.non_zero_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.non_zero_mv_ratio_th;
-			MotionSearchParam.large_sad_ratio_th = vencoder_tuning_param->motion_search_cfg.large_sad_ratio_th;
-#endif
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamMotionSearchParam, &MotionSearchParam);
-		}
-
-		VencH264VideoTiming H264VideoTiming;
-		if (vencoder_tuning_param->h264VuiTiming_cfg.timing_info_present_flag > 0) {
-			H264VideoTiming.num_units_in_tick = vencoder_tuning_param->h264VuiTiming_cfg.num_units_in_tick;
-			H264VideoTiming.time_scale = vencoder_tuning_param->h264VuiTiming_cfg.time_scale;
-			H264VideoTiming.fixed_frame_rate_flag = vencoder_tuning_param->h264VuiTiming_cfg.fixed_frame_rate_flag;
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264VideoTiming, &H264VideoTiming);
-		}
-#endif
+	loge("encode_param->bEnableGetWbYuv: %d", encode_param->bEnableGetWbYuv);
+    if(encode_param->bEnableGetWbYuv)
+    {
+	sWbYuvParam mWbYuvParam;
+	memset(&mWbYuvParam, 0, sizeof(mWbYuvParam));
+	mWbYuvParam.bEnableWbYuv = 1;
+	mWbYuvParam.nWbBufferNum = 1;
+	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnableWbYuv, &mWbYuvParam);
+    }
 
 #if 0
-		if(encode_param->IQpOffset > 0)
+        unsigned char value = 1;
+        //set the specify func
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264SVCSkip, &h264_func.SVCSkip);
+        value = 0;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIfilter, &value);
+        value = 0; //degree
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamRotation, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264FixQP, &h264_func.fixQP);
+        VideoEncSetParameterDl(pVideoEnc,
+            VENC_IndexParamH264CyclicIntraRefresh, &h264_func.sIntraRefresh);
+        value = 720/4;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSliceHeight, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamROIConfig, &h264_func.sRoiConfig[0]);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamROIConfig, &h264_func.sRoiConfig[1]);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamROIConfig, &h264_func.sRoiConfig[2]);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamROIConfig, &h264_func.sRoiConfig[3]);
+        value = 0;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetPSkip, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264AspectRatio, &h264_func.sAspectRatio);
+        value = 0;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamFastEnc, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264VideoSignal, &h264_func.sVideoSignal);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSuperFrameConfig, &h264_func.sSuperFrameCfg);
+#endif
+    }
+    else if(encode_param->encode_format == VENC_CODEC_H265)
+    {
+        result = initH265Func(&encode_param->h265_func, encode_param);
+        if(result)
+        {
+            loge("initH265Func error, return \n");
+            return -1;
+        }
+		value = 0;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProductCase, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIsNightCaseFlag, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSensorType, &value);
+
+        unsigned int vbv_size = 12*1024*1024;
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetVbvSize, &vbv_size);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH265Param, &encode_param->h265_func.h265Param);
+
+
+        unsigned int value = 1;
+		/*
+        if(encode_param->test_overlay_flag == 1)
+        {
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetOverlay, &encode_param->h265_func.sOverlayInfo);
+        }
+		*/
+        //VideoEncSetParameterDl(pVideoEnc,
+        //VENC_IndexParamAlterFrame, &h265_func.sAlterFrameRateInfo);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamChannelNum, &value);
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProcSet, &encode_param->h265_func.sVeProcInfo);
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamVirtualIFrame, &encode_param->frame_rate);
+        //value = 0;
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamPFrameIntraEn, &value);
+        //value = 1;
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEncodeTimeEn, &value);
+        //VideoEncSetParameterDl(pVideoEnc,
+        //VENC_IndexParamH265ToalFramesNum,  &h265_func.h265_rc_frame_total);
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH265Gop, &h265_func.h265Gop);
+
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamROIConfig, &h265_func.sRoiConfig[0]);
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264FixQP, &h265_func.fixQP);
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH265HVS, &h265_func.h265Hvs);
+        //VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH265TendRatioCoef, &h265_func.h265Trc);
+#ifdef GET_MB_INFO
+        VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamMBInfoOutput, &encode_param->h265_func.MBInfo);
+#endif
+
+#if 1 //def USE_VIDEO_SIGNAL
+		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamVUIVideoSignal, &mVencVideoSignal);
+		VideoEncGetParameterDl(pVideoEnc, VENC_IndexParamVUIVideoSignal, &mVencVideoSignal);
+		loge("1070 line print full_range_flag = %d, src_colour_primaries = %d, dst_colour_primaries = %d", mVencVideoSignal.full_range_flag, mVencVideoSignal.src_colour_primaries, mVencVideoSignal.dst_colour_primaries);
+#endif
+    if(encode_param->bEnableGetWbYuv)
 		{
-			loge("++++++++++++++IQpOffset=%d\n", encode_param->IQpOffset);
-			value = encode_param->IQpOffset;
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIQpOffset, &value);
+		sWbYuvParam mWbYuvParam;
+		memset(&mWbYuvParam, 0, sizeof(mWbYuvParam));
+		mWbYuvParam.bEnableWbYuv = 1;
+		mWbYuvParam.nWbBufferNum = 1;
+		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnableWbYuv, &mWbYuvParam);
 		}
-#endif
+    }
 
-#if (ISP_VERSION != 600 && ISP_VERSION != 603)
-		if(encode_param->n3DNR > 0) {
-			loge("++++++++++++++n3DNR=%d\n", encode_param->n3DNR);
-			value = encode_param->n3DNR;
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParam3DFilter, &value);
-		}
-#endif
-
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProcSet, &encode_param->h264_func.sVeProcInfo);
-	} else if(encode_param->encode_format == VENC_CODEC_H265) {
-		result = initH265Func(&encode_param->h265_func, encode_param);
-		if(result) {
-			loge("initH265Func error, return \n");
-			return VIDEOCODEC_FAIL;
-		}
-		if(encode_param->SbmBufSize > 0 ) {
-			vbv_size = encode_param->SbmBufSize;
-		} else {
-			vbv_size = VBV_TOTAL_SIZE;
-		}
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetVbvSize, &vbv_size);
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH265Param, &encode_param->h265_func.h265Param);
-
-		if(vencoder_tuning_param->savebsfile_cfg.Save_bsfile_flag > 0 &&
-			memcmp(vencoder_tuning_param->savebsfile_cfg.Filename, "\0", 1) != 0)//vencoder_tuning_param->savebsfile_cfg.Filename != "\0"
-		{
-			//sprintf(vencoder_tuning_param->savebsfile_cfg.Filename, "/tmp/test_1.dat");
-			VencSaveBSFile bs_file;
-			memcpy(bs_file.filename, vencoder_tuning_param->savebsfile_cfg.Filename, 256);
-			bs_file.save_bsfile_flag = 1;
-			bs_file.save_start_time = vencoder_tuning_param->savebsfile_cfg.Save_start_time;
-			bs_file.save_end_time = vencoder_tuning_param->savebsfile_cfg.Save_end_time;
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSaveBSFile, &bs_file);
-		}
-
-		value = 1;
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamChannelNum, &value);
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProcSet, &encode_param->h265_func.sVeProcInfo);
-
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-		VencIPTargetBitsRatio IPTargetBitsRatio;
-		IPTargetBitsRatio.nSceneCoef[0] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[0] / 100.0;
-		IPTargetBitsRatio.nSceneCoef[1] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[1] / 100.0;
-		IPTargetBitsRatio.nSceneCoef[2] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[2] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[0] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[0] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[1] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[1] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[2] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[2] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[3] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[3] / 100.0;
-		IPTargetBitsRatio.nMoveCoef[4] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[4] / 100.0;
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIPTargetBitsRatio, &IPTargetBitsRatio);
-
-		VencTargetBitsClipParam TargetBitsClipParam;
-		TargetBitsClipParam.dis_default_para = vencoder_tuning_param->vbr_cfg.BitsClipDisDefault;
-		TargetBitsClipParam.mode = vencoder_tuning_param->vbr_cfg.BitsClipMode;
-		TargetBitsClipParam.coef_th[0][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[0][0] / 100.0;
-		TargetBitsClipParam.coef_th[0][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[0][1] / 100.0;
-		TargetBitsClipParam.coef_th[1][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[1][0] / 100.0;
-		TargetBitsClipParam.coef_th[1][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[1][1] / 100.0;
-		TargetBitsClipParam.coef_th[2][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[2][0] / 100.0;
-		TargetBitsClipParam.coef_th[2][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[2][1] / 100.0;
-		TargetBitsClipParam.coef_th[3][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[3][0] / 100.0;
-		TargetBitsClipParam.coef_th[3][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[3][1] / 100.0;
-		TargetBitsClipParam.coef_th[4][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[4][0] / 100.0;
-		TargetBitsClipParam.coef_th[4][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[4][1] / 100.0;
-		TargetBitsClipParam.en_gop_clip = vencoder_tuning_param->vbr_cfg.BitsClipGopRtEn;
-		TargetBitsClipParam.gop_bit_ratio_th[0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[0] / 100.0;
-		TargetBitsClipParam.gop_bit_ratio_th[1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[1] / 100.0;
-		TargetBitsClipParam.gop_bit_ratio_th[2] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[2] / 100.0;
-		VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamTargetBitsClipParam, &TargetBitsClipParam);
-
-		VencMotionSearchParam MotionSearchParam;
-		MotionSearchParam.en_motion_search = vencoder_tuning_param->motion_search_cfg.motion_search_en;
-		if (MotionSearchParam.en_motion_search > 0) {
-			MotionSearchParam.dis_default_para = vencoder_tuning_param->motion_search_cfg.dis_default_para;
-			MotionSearchParam.hor_region_num = vencoder_tuning_param->motion_search_cfg.hor_region_num;
-			MotionSearchParam.ver_region_num = vencoder_tuning_param->motion_search_cfg.ver_region_num;
-			MotionSearchParam.large_mv_th = vencoder_tuning_param->motion_search_cfg.large_mv_th;
-			MotionSearchParam.large_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.large_mv_ratio_th;
-			MotionSearchParam.non_zero_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.non_zero_mv_ratio_th;
-#if (ISP_VERSION == 600)
-			MotionSearchParam.large_sad_ratio_th = vencoder_tuning_param->motion_search_cfg.large_sad_ratio_th;
-#endif
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamMotionSearchParam, &MotionSearchParam);
-		}
-
-		VencH265TimingS H265TimingS;
-		H265TimingS.timing_info_present_flag = vencoder_tuning_param->h265VuiTiming_cfg.timing_info_present_flag;
-		if (H265TimingS.timing_info_present_flag > 0) {
-			H265TimingS.num_units_in_tick = vencoder_tuning_param->h265VuiTiming_cfg.num_units_in_tick;
-			H265TimingS.time_scale = vencoder_tuning_param->h265VuiTiming_cfg.time_scale;
-			H265TimingS.num_ticks_poc_diff_one = vencoder_tuning_param->h265VuiTiming_cfg.ticks_poc_diff_one_minus1;
-			VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH265Timing, &H265TimingS);
-		}
-#endif
-	}
-
-	return VIDEOCODEC_OK;
+    return 0;
 }
 
-static void releaseMb(encode_param_t *encode_param)
+void releaseMb(encode_param_t *encode_param)
 {
-	VencMBInfo *pMBInfo;
-	VencMBModeCtrl *pMBMode;
-	if (encode_param->encode_format == VENC_CODEC_H264 && encode_param->h264_func.h264MBMode.mode_ctrl_en) {
-		pMBInfo = &encode_param->h264_func.MBInfo;
-		pMBMode = &encode_param->h264_func.h264MBMode;
-	} else if (encode_param->encode_format == VENC_CODEC_H265 && encode_param->h265_func.h265MBMode.mode_ctrl_en) {
-		pMBInfo = &encode_param->h265_func.MBInfo;
-		pMBMode = &encode_param->h265_func.h265MBMode;
-	} else {
+    VencMBInfo *pMBInfo;
+    VencMBModeCtrl *pMBMode;
+    if(encode_param->encode_format == VENC_CODEC_H264 && encode_param->h264_func.h264MBMode.mode_ctrl_en)
+    {
+        pMBInfo = &encode_param->h264_func.MBInfo;
+        pMBMode = &encode_param->h264_func.h264MBMode;
+    }
+    else if(encode_param->encode_format == VENC_CODEC_H265 && encode_param->h265_func.h265MBMode.mode_ctrl_en)
+    {
+        pMBInfo = &encode_param->h264_func.MBInfo;
+        pMBMode = &encode_param->h265_func.h265MBMode;
+    }
+    else
+        return;
+
+    if(pMBInfo->p_para)
+        FREE(pMBInfo->p_para);
+    if(pMBMode->p_info)
+        FREE(pMBMode->p_info);
+}
+
+static void dump_yuv_to_file(unsigned char* y_plane, unsigned char* uv_plane, int width, int height) {
+	loge("width: %d, height: %d", width, height);
+	FILE* fp = fopen("/tmp/output.yuv", "wb");
+	if (!fp) {
+		loge("Failed to open file: /tmp/output.yuv");
 		return;
 	}
 
-	if(pMBInfo->p_para)
-	{
-		free(pMBInfo->p_para);
-		pMBInfo->p_para = NULL;
-	}
+	size_t y_size = width * height;
+	fwrite(y_plane, 1, y_size, fp);
 
-#if (ISP_VERSION != 600 && ISP_VERSION != 603)
-	if(pMBMode->p_info)
-	{
-		free(pMBMode->p_info);
-		pMBMode->p_info = NULL;
-	}
-#endif
+	size_t uv_size = width * height / 2;
+	fwrite(uv_plane, 1, uv_size, fp);
+
+	fclose(fp);
+	loge("YUV data dumped to /tmp/output.yuv");
 }
 
 static int encoder_doProcessData(encode_param_t *encode_param,
@@ -1422,26 +1167,19 @@ static int encoder_doProcessData(encode_param_t *encode_param,
 {
 	unsigned int done_Number = 0;
 	long long time1, time2;
-	int ret;
+	int ret = 0;
 	//loge("encoder_doProcessData");
 
 #ifdef INPUTSOURCE_FILE
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 	VideoEncAllocInputBufDl(pVideoEnc, &encode_param->bufferParam);
-#else
-	AllocInputBufferDl(pVideoEnc, &encode_param->bufferParam);
-#endif
 	inputBuffer = &encode_param->inputBuffer;
 #endif
 
 	//while(done_Number < encode_param->encode_frame_num)
 	{
 #ifdef INPUTSOURCE_FILE
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 		GetOneVideoEncAllocInputBufDl(pVideoEnc, inputBuffer);
-#else
-		GetOneAllocInputBufferDl(pVideoEnc, inputBuffer);
-#endif
+
 		unsigned int size1, size2;
 		size1 = fread(inputBuffer->pAddrVirY, 1,
 		encode_param->src_size, encode_param->in_file);
@@ -1456,11 +1194,7 @@ static int encoder_doProcessData(encode_param_t *encode_param,
 							encode_param->src_size/2, encode_param->in_file);
 		}
 		inputBuffer->bEnableCorp = 0;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 		FlushCacheVideoEncAllocInputBufDl(pVideoEnc, inputBuffer);
-#else
-		FlushCacheAllocInputBufferDl(pVideoEnc, inputBuffer);
-#endif
 
 		inputBuffer->nPts += 1*1000/encode_param->frame_rate;
 
@@ -1477,15 +1211,9 @@ static int encoder_doProcessData(encode_param_t *encode_param,
 		printf("encode frame %u use time is %lldus..\n\n", done_Number,(time2-time1));
 		AlreadyUsedInputBufferDl(pVideoEnc, inputBuffer);
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 		ReturnOneVideoEncAllocInputBufDl(pVideoEnc, inputBuffer);
 
 		ret = VideoEncDequeueOutputBufDl(pVideoEnc, &encode_param->outputBuffer);
-#else
-		ReturnOneAllocInputBufferDl(pVideoEnc, inputBuffer);
-
-		ret = GetOneBitstreamFrameDl(pVideoEnc, &encode_param->outputBuffer);
-#endif
 		if(ret == -1)
 		{
 			loge("Error - Get one stream frame fail!");
@@ -1498,24 +1226,19 @@ static int encoder_doProcessData(encode_param_t *encode_param,
 			fwrite(encode_param->outputBuffer.pData1, 1, encode_param->outputBuffer.nSize1, encode_param->out_file);
 		}
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 		VideoEncQueueOutputBufDl(pVideoEnc, &encode_param->outputBuffer);
-#else
-		FreeOneBitStreamFrameDl(pVideoEnc, &encode_param->outputBuffer);
-#endif
 		done_Number++;
 #else
-
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 		inputBuffer->bEnableCorp = 0;
 		inputBuffer->sCropInfo.nLeft =  240;
 		inputBuffer->sCropInfo.nTop  =  240;
 		inputBuffer->sCropInfo.nWidth  =  240;
 		inputBuffer->sCropInfo.nHeight =  240;
 		inputBuffer->nPts += 1*1000/encode_param->frame_rate;
-
-		//loge("pAddrPhyY = 0x%p, 0x%p", inputBuffer->pAddrPhyY, inputBuffer->pAddrPhyC);
-		//loge("queue input buf start");
+		inputBuffer->envLV = 250;
+		inputBuffer->bNeedFlushCache = 1;
+		inputBuffer->nWidth = encode_param->src_width;
+		inputBuffer->nHeight = encode_param->src_height;
 		VideoEncQueueInputBufDl(pVideoEnc, inputBuffer);
 		//loge("queue input buf finish");
 
@@ -1525,77 +1248,33 @@ static int encoder_doProcessData(encode_param_t *encode_param,
 			loge("wait for input frame timeout");
 		}
 		//loge("wait for sem finish");
-
-		#if 0
-		ret = FlushCacheVideoEncAllocInputBufDl(pVideoEnc, inputBuffer);
-		if(ret)
-		{
-			loge("FlushCacheAllocInputBuffer error, ret=%d", ret);
-			return VIDEOCODEC_FAIL;
-		}
-
-		ret = AddOneInputBufferDl(pVideoEnc, inputBuffer);
-		if(ret)
-		{
-			loge("AddOneInputBuffer error, ret=%d", ret);
-			return VIDEOCODEC_FAIL;
-		}
-
-		time1 = GetNowUs();
-		ret = VideoEncodeOneFrameDl(pVideoEnc);
-		if(ret < 0)
-		{
-			loge("encoder error, goto out， ret=%d", ret);
-			return VIDEOCODEC_FAIL;
-		}
-		time2 = GetNowUs();
-		logt("encode frame %d use time is %lldus..", done_Number,(time2-time1));
-
-		AlreadyUsedInputBufferDl(pVideoEnc, inputBuffer);
-		//ReturnOneVideoEncAllocInputBufDl(pVideoEnc, inputBuffer);
-
-		#endif
-
+#if 1
 		ret = VideoEncDequeueOutputBufDl(pVideoEnc, outputBuffer);
-		//loge("dequeue out buffer, ret = %d", ret);
-#else
-		ret = FlushCacheAllocInputBufferDl(pVideoEnc, inputBuffer);
-		if(ret)
-		{
-			loge("FlushCacheAllocInputBuffer error, ret=%d", ret);
-			return VIDEOCODEC_FAIL;
-		}
-
-		inputBuffer->nPts += 1*1000/encode_param->frame_rate;
-
-		ret = AddOneInputBufferDl(pVideoEnc, inputBuffer);
-		if(ret)
-		{
-			loge("AddOneInputBuffer error, ret=%d", ret);
-			return VIDEOCODEC_FAIL;
-		}
-
-		time1 = GetNowUs();
-		ret = VideoEncodeOneFrameDl(pVideoEnc);
-		if(ret < 0)
-		{
-			loge("encoder error, goto out�� ret=%d", ret);
-			return VIDEOCODEC_FAIL;
-		}
-		time2 = GetNowUs();
-		logt("encode frame %d use time is %lldus..", done_Number,(time2-time1));
-
-		AlreadyUsedInputBufferDl(pVideoEnc, inputBuffer);
-		//ReturnOneAllocInputBufferDl(pVideoEnc, inputBuffer);
-
-		ret = GetOneBitstreamFrameDl(pVideoEnc, outputBuffer);
-#endif
-		if(ret == -1)
+		if(ret != 0)
 		{
 			loge("Error - Get one stream frame fail!");
 			return VIDEOCODEC_FAIL;
 		}
 		done_Number++;
+#else
+	while(done_Number < 10) {
+		ret = VideoEncDequeueOutputBufDl(pVideoEnc, outputBuffer);
+		if(ret == VENC_RESULT_BITSTREAM_IS_EMPTY)
+		{
+			// loge("bitstream is empty ,continue");
+			done_Number++;
+			usleep(10*1000);
+		} else if (ret == 0) {
+			break;
+		}
+	}
+	if(done_Number == 10){
+		loge("inputBuffer: %p", inputBuffer);
+		loge("Error - Get one stream frame fail! ret: %d", ret);
+		CdcVeReset(gBaseConfig.veOpsS, gBaseConfig.pVeOpsSelf);
+		return VIDEOCODEC_FAIL;
+	}
+#endif
 #endif
 	}
 
@@ -1605,11 +1284,8 @@ static int encoder_doProcessData(encode_param_t *encode_param,
 int EncoderFreeOutputBuffer(VencOutputBuffer *outputBuffer)
 {
 	int ret;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 	ret = VideoEncQueueOutputBufDl(pVideoEnc, outputBuffer);
-#else
-	ret = FreeOneBitStreamFrameDl(pVideoEnc, outputBuffer);
-#endif
+
 	return ret;
 }
 
@@ -1625,7 +1301,7 @@ int EncoderOpen(VENC_CODEC_TYPE type)
 #ifdef VENC_DYNAMIC_LIBRARY
 	loge("Link vencode function with dynamic library");
 	//********load dynamic library********
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+#if (ISP_VERSION == 610)
 	vencoderLib = dlopen("/usr/lib/libvencoder.so", RTLD_NOW);
 	if(vencoderLib == NULL)
 	{
@@ -1650,7 +1326,7 @@ int EncoderOpen(VENC_CODEC_TYPE type)
 	VideoEncSetParameterDl        = (VideoEncSetParameterFunc)dlsym(vencoderLib, "VencSetParameter");
 	VideoEncoderSetFreqDl         = (VideoEncSetFreqFunc)dlsym(vencoderLib, "VencSetFreq");
 	VideoEncSetCallbacksDl         = (VideoEncSetCallbacksFunc)dlsym(vencoderLib, "VencSetCallbacks");
-#else //isp600
+#else
 	vencoderLib = dlopen("/system/lib64/libvencoder.so", RTLD_NOW);
 	if(vencoderLib == NULL)
 	{
@@ -1679,7 +1355,7 @@ int EncoderOpen(VENC_CODEC_TYPE type)
 
 #elif defined VENC_STATIC_LIBRARY
 	loge("Link vencode function with static library");
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+#if (ISP_VERSION == 610)
 	VideoEncCreateDl              = &VencCreate;
 	VideoEncDestroyDl             = &VencDestroy;
 	VideoEncInitDl                = &VencInit;
@@ -1691,11 +1367,11 @@ int EncoderOpen(VENC_CODEC_TYPE type)
 	VideoEncQueueInputBufDl       = &VencQueueInputBuf;
 	VideoEncDequeueOutputBufDl    = &VencDequeueOutputBuf;
 	VideoEncQueueOutputBufDl      = &VencQueueOutputBuf;
-	VideoEncGetParameterDl        = &VencGetParameter;
-	VideoEncSetParameterDl        = &VencSetParameter;
+	VideoEncGetParameterDl        = (VideoEncGetParameterFunc)&VencGetParameter;
+	VideoEncSetParameterDl        = (VideoEncSetParameterFunc)&VencSetParameter;
 	VideoEncoderSetFreqDl         = &VencSetFreq;
 	VideoEncSetCallbacksDl        = &VencSetCallbacks;
-#else //isp600
+#else
 	VideoEncCreateDl              = &VideoEncCreate;
 	VideoEncDestroyDl             = &VideoEncDestroy;
 	VideoEncInitDl                = &VideoEncInit;
@@ -1714,7 +1390,7 @@ int EncoderOpen(VENC_CODEC_TYPE type)
 #endif
 #endif
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+#if (ISP_VERSION == 610)
 	if(!VideoEncCreateDl || !VideoEncDestroyDl || !VideoEncInitDl || !VideoEncAllocInputBufDl \
 	|| !VideoEncDequeueOutputBufDl || !VideoEncSetCallbacksDl \
 	|| !VideoEncQueueOutputBufDl || !VideoEncGetParameterDl || !VideoEncSetParameterDl || !VideoEncoderSetFreqDl)
@@ -1737,7 +1413,7 @@ int EncoderOpen(VENC_CODEC_TYPE type)
 		VideoEncGetParameterDl = NULL;
 		VideoEncSetParameterDl = NULL;
 		VideoEncoderSetFreqDl = NULL;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+#if (ISP_VERSION == 610)
 		VideoEncAllocInputBufDl = NULL;
 		VideoEncDequeueOutputBufDl = NULL;
 		VideoEncQueueOutputBufDl = NULL;
@@ -1757,86 +1433,78 @@ int EncoderOpen(VENC_CODEC_TYPE type)
 		return VIDEOCODEC_FAIL;
 	}
 	//********end load********************
-	pVideoEnc = VideoEncCreateDl(type);
-	if(pVideoEnc == NULL)
-	{
-		loge("Error - Create Video encoder fail!");
-		return VIDEOCODEC_FAIL;
-	}
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 	sem_init(&inputFrameSem, 0, 0);
-#endif
 
 	return VIDEOCODEC_OK;
 }
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 static VencCbType vencCallBack;
-#endif
 
 int EncoderPrepare(encode_param_t *encode_param)
 {
 	int ret;
-	VencBaseConfig baseConfig;
-
-	if(pVideoEnc == NULL)
-	{
-		loge("Error - Video encoder has not been create normally, should call openEnc first");
-		return VIDEOCODEC_FAIL;
-	}
+	// VencBaseConfig baseConfig;
 
 	encode_param->inputBuffer.bEnableCorp = vencoder_tuning_param->base_cfg.CropEn;
 	encode_param->inputBuffer.sCropInfo.nLeft = vencoder_tuning_param->base_cfg.Crop_X;
 	encode_param->inputBuffer.sCropInfo.nTop = vencoder_tuning_param->base_cfg.Crop_Y;
 	encode_param->inputBuffer.sCropInfo.nWidth = vencoder_tuning_param->base_cfg.Crop_Width;
 	encode_param->inputBuffer.sCropInfo.nHeight = vencoder_tuning_param->base_cfg.Crop_Height;
-	memset(&baseConfig, 0 ,sizeof(VencBaseConfig));
-	baseConfig.nInputWidth= encode_param->src_width;
-	baseConfig.nInputHeight = encode_param->src_height;
-	baseConfig.nStride = encode_param->src_width;
-	baseConfig.nDstWidth = encode_param->dst_width;
-	baseConfig.nDstHeight = encode_param->dst_height;
-	baseConfig.eInputFormat = encode_param->picture_format;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-	baseConfig.bLbcLossyComEnFlag1_5x = encode_param->bLbcLossyComEnFlag1_5x;
-	baseConfig.bLbcLossyComEnFlag2x = encode_param->bLbcLossyComEnFlag2x;
-	baseConfig.bLbcLossyComEnFlag2_5x = encode_param->bLbcLossyComEnFlag2_5x;
-#endif
-	baseConfig.bEncH264Nalu = 0;
-#if (ISP_VERSION == 603)
-	baseConfig.bOnlineMode = 1;
-#endif
-	ret = setEncParam(pVideoEnc, encode_param);
+	memset(&gBaseConfig, 0 ,sizeof(VencBaseConfig));
+	gBaseConfig.memops = MemAdapterGetOpsS();
+	if (gBaseConfig.memops == NULL) {
+		loge("MemAdapterGetOpsS failed\n");
+		return VIDEOCODEC_FAIL;
+	}
+	CdcMemOpen(gBaseConfig.memops);
+	gBaseConfig.nInputWidth= encode_param->src_width;
+	gBaseConfig.nInputHeight = encode_param->src_height;
+	gBaseConfig.nStride = encode_param->src_width;
+	gBaseConfig.nDstWidth = encode_param->dst_width;
+	gBaseConfig.nDstHeight = encode_param->dst_height;
+	gBaseConfig.eInputFormat = encode_param->picture_format;
+	gBaseConfig.bEncH264Nalu = 0;
+	gBaseConfig.nChannel = 0;
+	gBaseConfig.bOnlineMode = 1;
+	/* vcu */
+	gBaseConfig.bVcuOn = 1;
+	gBaseConfig.bVcuAutoMode = 0;
+	gBaseConfig.bOnlineChannel = 0;
+	gBaseConfig.nOnlineShareBufNum  = 0;
+	gBaseConfig.nOnlineShareBufBk  = 0;
+	gBaseConfig.sensorId = 0;
+	gBaseConfig.bkId = 0;
+	gBaseConfig.bLbcLossyComEnFlag1_5x = encode_param->bLbcLossyComEnFlag1_5x;
+	gBaseConfig.bLbcLossyComEnFlag2x = encode_param->bLbcLossyComEnFlag2x;
+	gBaseConfig.bLbcLossyComEnFlag2_5x = encode_param->bLbcLossyComEnFlag2_5x;
+
+	loge("encode_param->encode_format:%d\n", encode_param->encode_format);
+	pVideoEnc = VideoEncCreateDl(encode_param->encode_format);
+	if(pVideoEnc == NULL)
+	{
+		loge("Error - Create Video encoder fail!");
+		return VIDEOCODEC_FAIL;
+	}
+
+	ret = setEncParam(pVideoEnc, encode_param, &gBaseConfig);
 	if(ret)
 	{
 		loge("Error - Set Encode Paramant fail");
 		goto out;
 	}
 
-	ret = VideoEncInitDl(pVideoEnc, &baseConfig);
+	ret = VideoEncInitDl(pVideoEnc, &gBaseConfig);
 	if(ret)
 	{
 		loge("Error - Video Encode Init fail");
 		goto out;
 	}
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-    if(encode_param->bEnableGetWbYuv)
-    {
-	sWbYuvParam mWbYuvParam;
-	memset(&mWbYuvParam, 0, sizeof(sWbYuvParam));
-	mWbYuvParam.bEnableWbYuv = 1;
-	mWbYuvParam.nWbBufferNum = 1;
-	mWbYuvParam.scalerRatio  = VENC_ISP_SCALER_0;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnableWbYuv, &mWbYuvParam);
-    }
-
 	vencCallBack.EventHandler = eventHandler;
 	vencCallBack.InputBufferDone = inputBufferDone;
 	VideoEncSetCallbacksDl(pVideoEnc, &vencCallBack, encode_param);
 
 	VideoEncStartDl(pVideoEnc);
-#endif
 
 	return VIDEOCODEC_OK;
 
@@ -1855,9 +1523,7 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 		return VIDEOCODEC_FAIL;
 	}
 
-#if (ISP_VERSION == 600)
 	struct VeProcSet mProcSet;
-	memset(&mProcSet, 0, sizeof(VeProcSet));
 	mProcSet.bProcEnable = vencoder_tuning_param->proc_cfg.ProcEnable;
 	mProcSet.nProcFreq = vencoder_tuning_param->proc_cfg.ProcFreq;
 	mProcSet.nStatisBitRateTime = vencoder_tuning_param->proc_cfg.StatisBitRateTime;
@@ -1865,14 +1531,12 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProcSet, &mProcSet);
 
 	struct VencFixQP FixQP;
-	memset(&FixQP, 0, sizeof(VencFixQP));
 	FixQP.bEnable = vencoder_tuning_param->QPcontrol_cfg.FixQPEn;
 	FixQP.nIQp = vencoder_tuning_param->QPcontrol_cfg.Fix_I_Qp;
 	FixQP.nPQp = vencoder_tuning_param->QPcontrol_cfg.Fix_P_Qp;
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264FixQP, &FixQP);
 
 	struct VencQPRange QPRange;
-	memset(&QPRange, 0, sizeof(VencQPRange));
 	QPRange.nQpInit = vencoder_tuning_param->QPcontrol_cfg.InitQp;
 	QPRange.nMinqp = vencoder_tuning_param->QPcontrol_cfg.Min_I_Qp;
 	QPRange.nMaxqp = vencoder_tuning_param->QPcontrol_cfg.Max_I_Qp;
@@ -1880,9 +1544,8 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	QPRange.nMaxPqp = vencoder_tuning_param->QPcontrol_cfg.Max_P_Qp;
 	QPRange.bEnMbQpLimit = vencoder_tuning_param->QPcontrol_cfg.MbQPLimitEn;
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264QPRange, &QPRange);
-
+/*
 	VencIPTargetBitsRatio IPTargetBitsRatio;
-	memset(&IPTargetBitsRatio, 0, sizeof(VencIPTargetBitsRatio));
 	IPTargetBitsRatio.nSceneCoef[0] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[0] / 100.0;
 	IPTargetBitsRatio.nSceneCoef[1] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[1] / 100.0;
 	IPTargetBitsRatio.nSceneCoef[2] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[2] / 100.0;
@@ -1894,7 +1557,6 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIPTargetBitsRatio, &IPTargetBitsRatio);
 
 	VencTargetBitsClipParam TargetBitsClipParam;
-	memset(&TargetBitsClipParam, 0, sizeof(VencTargetBitsClipParam));
 	TargetBitsClipParam.dis_default_para = vencoder_tuning_param->vbr_cfg.BitsClipDisDefault;
 	TargetBitsClipParam.mode = vencoder_tuning_param->vbr_cfg.BitsClipMode;
 	TargetBitsClipParam.coef_th[0][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[0][0] / 100.0;
@@ -1914,7 +1576,6 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamTargetBitsClipParam, &TargetBitsClipParam);
 
 	VencExtremeD3DParam ExtremeD3DParam;
-	memset(&ExtremeD3DParam, 0, sizeof(VencExtremeD3DParam));
 	ExtremeD3DParam.en_extreme_d3d = vencoder_tuning_param->d3d_cfg.extreme_d3d_en;
 	ExtremeD3DParam.zero_mv_ratio_th = vencoder_tuning_param->d3d_cfg.zero_mv_ratio_th;
 	ExtremeD3DParam.ex_d3d_param.enable_3d_filter = vencoder_tuning_param->d3d_cfg.extreme_d3d_en;
@@ -1928,7 +1589,6 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSetExtremeD3D, &ExtremeD3DParam);
 
 	struct s3DfilterParam encoder_3d_param;
-	memset(&encoder_3d_param, 0, sizeof(s3DfilterParam));
 	encoder_3d_param.enable_3d_filter = vencoder_tuning_param->d3d_cfg.d3d_en;
 	encoder_3d_param.max_mv_th = vencoder_tuning_param->d3d_cfg.d3d_max_mv_th;
 	encoder_3d_param.max_mad_th = vencoder_tuning_param->d3d_cfg.d3d_max_mad_th;
@@ -1940,7 +1600,6 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParam3DFilterNew, &encoder_3d_param);
 
 	VencRegionD3DParam RegionD3DParam;
-	memset(&RegionD3DParam, 0, sizeof(VencRegionD3DParam));
 	RegionD3DParam.en_region_d3d = vencoder_tuning_param->region_d3d_cfg.region_d3d_en;
 	RegionD3DParam.dis_default_para = vencoder_tuning_param->region_d3d_cfg.dis_default_para;
 	RegionD3DParam.hor_region_num = vencoder_tuning_param->region_d3d_cfg.hor_region_num;
@@ -1961,7 +1620,6 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamRegionD3DParam, &RegionD3DParam);
 
 	struct VencROIConfig ROIConfig;
-	memset(&ROIConfig, 0, sizeof(VencROIConfig));
 	ROIConfig.index = vencoder_tuning_param->roi_cfg.roi_idx;
 	ROIConfig.bEnable = vencoder_tuning_param->roi_cfg.roi_en;
 	ROIConfig.roi_abs_flag = vencoder_tuning_param->roi_cfg.abs_qp_en;
@@ -1985,7 +1643,6 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamWeakTextTh, &value_f);
 
 	VencVe2IspD2DLimit Ve2IspD2DLimit;
-	memset(&Ve2IspD2DLimit, 0, sizeof(VencVe2IspD2DLimit));
 	Ve2IspD2DLimit.en_d2d_limit = vencoder_tuning_param->ve2isp_cfg.d2d_limit_en;
 	if (Ve2IspD2DLimit.en_d2d_limit > 0) {
 		Ve2IspD2DLimit.d2d_level[0] = vencoder_tuning_param->ve2isp_cfg.d2d_level[0];
@@ -1998,7 +1655,6 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamVe2IspD2DLimit, &Ve2IspD2DLimit);
 
 	VencSuperFrameConfig SuperFrameConfig;
-	memset(&SuperFrameConfig, 0, sizeof(VencSuperFrameConfig));
 	SuperFrameConfig.eSuperFrameMode = vencoder_tuning_param->super_frame_cfg.super_frm_mode;
 	SuperFrameConfig.nMaxIFrameBits = vencoder_tuning_param->super_frame_cfg.super_i_frm_bits;
 	SuperFrameConfig.nMaxPFrameBits = vencoder_tuning_param->super_frame_cfg.super_p_frm_bits;
@@ -2007,7 +1663,6 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSuperFrameConfig, &SuperFrameConfig);
 
 	VencMotionSearchParam MotionSearchParam;
-	memset(&MotionSearchParam, 0, sizeof(VencMotionSearchParam));
 	MotionSearchParam.en_motion_search = vencoder_tuning_param->motion_search_cfg.motion_search_en;
 	if (MotionSearchParam.en_motion_search > 0) {
 		MotionSearchParam.dis_default_para = vencoder_tuning_param->motion_search_cfg.dis_default_para;
@@ -2016,196 +1671,10 @@ int EncoderParamUpdate(encode_param_t *encode_param)
 		MotionSearchParam.large_mv_th = vencoder_tuning_param->motion_search_cfg.large_mv_th;
 		MotionSearchParam.large_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.large_mv_ratio_th;
 		MotionSearchParam.non_zero_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.non_zero_mv_ratio_th;
-		MotionSearchParam.large_sad_ratio_th = vencoder_tuning_param->motion_search_cfg.large_sad_ratio_th;
+		MotionSearchParam.large_mad_ratio_th = vencoder_tuning_param->motion_search_cfg.large_sad_ratio_th;
 	}
 	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamMotionSearchParam, &MotionSearchParam);
-#else if (ISP_VERSION == 603)
-	struct VeProcSet mProcSet;
-	memset(&mProcSet, 0, sizeof(VeProcSet));
-	mProcSet.bProcEnable = vencoder_tuning_param->proc_cfg.ProcEnable;
-	mProcSet.nProcFreq = vencoder_tuning_param->proc_cfg.ProcFreq;
-	mProcSet.nStatisBitRateTime = vencoder_tuning_param->proc_cfg.StatisBitRateTime;
-	mProcSet.nStatisFrRateTime = vencoder_tuning_param->proc_cfg.StatisFrmRateTime;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamProcSet, &mProcSet);
-
-	struct VencFixQP FixQP;
-	memset(&FixQP, 0, sizeof(VencFixQP));
-	FixQP.bEnable = vencoder_tuning_param->QPcontrol_cfg.FixQPEn;
-	FixQP.nIQp = vencoder_tuning_param->QPcontrol_cfg.Fix_I_Qp;
-	FixQP.nPQp = vencoder_tuning_param->QPcontrol_cfg.Fix_P_Qp;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264FixQP, &FixQP);
-
-	struct VencQPRange QPRange;
-	memset(&QPRange, 0, sizeof(VencQPRange));
-	QPRange.nQpInit = vencoder_tuning_param->QPcontrol_cfg.InitQp;
-	QPRange.nMinqp = vencoder_tuning_param->QPcontrol_cfg.Min_I_Qp;
-	QPRange.nMaxqp = vencoder_tuning_param->QPcontrol_cfg.Max_I_Qp;
-	QPRange.nMinPqp = vencoder_tuning_param->QPcontrol_cfg.Min_P_Qp;
-	QPRange.nMaxPqp = vencoder_tuning_param->QPcontrol_cfg.Max_P_Qp;
-	QPRange.bEnMbQpLimit = vencoder_tuning_param->QPcontrol_cfg.MbQPLimitEn;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamH264QPRange, &QPRange);
-
-	VencIPTargetBitsRatio IPTargetBitsRatio;
-	memset(&IPTargetBitsRatio, 0, sizeof(VencIPTargetBitsRatio));
-	IPTargetBitsRatio.nSceneCoef[0] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[0] / 100.0;
-	IPTargetBitsRatio.nSceneCoef[1] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[1] / 100.0;
-	IPTargetBitsRatio.nSceneCoef[2] = (float)vencoder_tuning_param->vbr_cfg.I2PSceneCoef[2] / 100.0;
-	IPTargetBitsRatio.nMoveCoef[0] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[0] / 100.0;
-	IPTargetBitsRatio.nMoveCoef[1] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[1] / 100.0;
-	IPTargetBitsRatio.nMoveCoef[2] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[2] / 100.0;
-	IPTargetBitsRatio.nMoveCoef[3] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[3] / 100.0;
-	IPTargetBitsRatio.nMoveCoef[4] = (float)vencoder_tuning_param->vbr_cfg.I2PMoveCoef[4] / 100.0;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIPTargetBitsRatio, &IPTargetBitsRatio);
-
-	VencTargetBitsClipParam TargetBitsClipParam;
-	memset(&TargetBitsClipParam, 0, sizeof(VencTargetBitsClipParam));
-	TargetBitsClipParam.dis_default_para = vencoder_tuning_param->vbr_cfg.BitsClipDisDefault;
-	TargetBitsClipParam.mode = vencoder_tuning_param->vbr_cfg.BitsClipMode;
-	TargetBitsClipParam.coef_th[0][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[0][0] / 100.0;
-	TargetBitsClipParam.coef_th[0][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[0][1] / 100.0;
-	TargetBitsClipParam.coef_th[1][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[1][0] / 100.0;
-	TargetBitsClipParam.coef_th[1][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[1][1] / 100.0;
-	TargetBitsClipParam.coef_th[2][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[2][0] / 100.0;
-	TargetBitsClipParam.coef_th[2][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[2][1] / 100.0;
-	TargetBitsClipParam.coef_th[3][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[3][0] / 100.0;
-	TargetBitsClipParam.coef_th[3][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[3][1] / 100.0;
-	TargetBitsClipParam.coef_th[4][0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[4][0] / 100.0;
-	TargetBitsClipParam.coef_th[4][1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipCoef[4][1] / 100.0;
-	TargetBitsClipParam.en_gop_clip = vencoder_tuning_param->vbr_cfg.BitsClipGopRtEn;
-	TargetBitsClipParam.gop_bit_ratio_th[0] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[0] / 100.0;
-	TargetBitsClipParam.gop_bit_ratio_th[1] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[1] / 100.0;
-	TargetBitsClipParam.gop_bit_ratio_th[2] = (float)vencoder_tuning_param->vbr_cfg.BitsClipGopRtTh[2] / 100.0;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamTargetBitsClipParam, &TargetBitsClipParam);
-
-	struct Venc3dFilterParam encoder_3d_param;
-	memset(&encoder_3d_param, 0, sizeof(Venc3dFilterParam));
-	encoder_3d_param.e3dEn = vencoder_tuning_param->d3d_cfg.e3dEn;
-	encoder_3d_param.e3dDefaultDis = vencoder_tuning_param->d3d_cfg.e3dDefaultDis;
-	encoder_3d_param.e3dLumaEn = vencoder_tuning_param->d3d_cfg.e3dLumaEn;
-	encoder_3d_param.e3dChromaEn = vencoder_tuning_param->d3d_cfg.e3dChromaEn;
-	encoder_3d_param.e3dMoveStatusEn = vencoder_tuning_param->d3d_cfg.e3dMoveStatusEn;
-	encoder_3d_param.e3dPixDiffEn = vencoder_tuning_param->d3d_cfg.e3dPixDiffEn;
-	encoder_3d_param.e3dCoefAutoMode = vencoder_tuning_param->d3d_cfg.e3dCoefAutoMode;
-	encoder_3d_param.e3dMaxCoef = vencoder_tuning_param->d3d_cfg.e3dMaxCoef;
-    encoder_3d_param.e3dMinCoef = vencoder_tuning_param->d3d_cfg.e3dMinCoef;
-    encoder_3d_param.noiseModeEn = vencoder_tuning_param->d3d_cfg.noiseModeEn;
-    encoder_3d_param.lambdaOffset = vencoder_tuning_param->d3d_cfg.lambdaOffset;
-    encoder_3d_param.noiseEstVal = vencoder_tuning_param->d3d_cfg.noiseEstVal;
-    encoder_3d_param.e3dStatusTh[0] = vencoder_tuning_param->d3d_cfg.e3dStatusTh[0];
-    encoder_3d_param.e3dStatusTh[1] = vencoder_tuning_param->d3d_cfg.e3dStatusTh[1];
-    encoder_3d_param.e3dStatusTh[2] = vencoder_tuning_param->d3d_cfg.e3dStatusTh[2];
-    encoder_3d_param.e3dMoveStrengthMvTh[0] = vencoder_tuning_param->d3d_cfg.e3dMoveStrengthMvTh[0];
-    encoder_3d_param.e3dMoveStrengthMvTh[1] = vencoder_tuning_param->d3d_cfg.e3dMoveStrengthMvTh[1];
-    encoder_3d_param.e3dMoveStrengthMvTh[2] = vencoder_tuning_param->d3d_cfg.e3dMoveStrengthMvTh[2];
-    encoder_3d_param.e3dAutoModeAvgTh[0] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[0];
-    encoder_3d_param.e3dAutoModeAvgTh[1] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[1];
-    encoder_3d_param.e3dAutoModeAvgTh[2] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[2];
-    encoder_3d_param.e3dAutoModeAvgTh[3] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[3];
-    encoder_3d_param.e3dAutoModeAvgTh[4] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[4];
-    encoder_3d_param.e3dAutoModeAvgTh[5] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[5];
-    encoder_3d_param.e3dAutoModeAvgTh[6] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[6];
-    encoder_3d_param.e3dAutoModeAvgTh[7] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[7];
-    encoder_3d_param.e3dAutoModeAvgTh[8] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[8];
-    encoder_3d_param.e3dAutoModeAvgTh[9] = vencoder_tuning_param->d3d_cfg.e3dAutoModeAvgTh[9];
-    encoder_3d_param.e3dAutoModeCoef[0] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[0];
-    encoder_3d_param.e3dAutoModeCoef[1] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[1];
-    encoder_3d_param.e3dAutoModeCoef[2] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[2];
-    encoder_3d_param.e3dAutoModeCoef[3] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[3];
-    encoder_3d_param.e3dAutoModeCoef[4] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[4];
-    encoder_3d_param.e3dAutoModeCoef[5] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[5];
-    encoder_3d_param.e3dAutoModeCoef[6] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[6];
-    encoder_3d_param.e3dAutoModeCoef[7] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[7];
-    encoder_3d_param.e3dAutoModeCoef[8] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[8];
-    encoder_3d_param.e3dAutoModeCoef[9] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[9];
-    encoder_3d_param.e3dAutoModeCoef[10] = vencoder_tuning_param->d3d_cfg.e3dAutoModeCoef[10];
-    
-    encoder_3d_param.sParam.uRegionWidth = vencoder_tuning_param->d3d_cfg.uRegionWidth;
-    encoder_3d_param.sParam.uRegionHeight = vencoder_tuning_param->d3d_cfg.uRegionHeight;
-    encoder_3d_param.sParam.uRegionHorNum = vencoder_tuning_param->d3d_cfg.uRegionHorNum;
-    encoder_3d_param.sParam.uRegionVerNum = vencoder_tuning_param->d3d_cfg.uRegionVerNum;
-    encoder_3d_param.sParam.uRegionTotalNum = vencoder_tuning_param->d3d_cfg.uRegionTotalNum;
-    encoder_3d_param.sParam.e3dRegionEnable = vencoder_tuning_param->d3d_cfg.e3dRegionEnable;
-    encoder_3d_param.sParam.e3dRegionAutoMode = vencoder_tuning_param->d3d_cfg.e3dRegionAutoMode;
-    encoder_3d_param.sParam.e3dRegionUpDownExpandEn = vencoder_tuning_param->d3d_cfg.e3dRegionUpDownExpandEn;
-    encoder_3d_param.sParam.e3dRegionLeftRightExpandEn = vencoder_tuning_param->d3d_cfg.e3dRegionLeftRightExpandEn;
-    encoder_3d_param.sParam.histogramRegionMvLevelReadEn = vencoder_tuning_param->d3d_cfg.histogramRegionMvLevelReadEn;
-    encoder_3d_param.sParam.histogramRegionMvLevelWriteEn = vencoder_tuning_param->d3d_cfg.histogramRegionMvLevelWriteEn;
-    encoder_3d_param.sParam.regionHeightDiv16 = vencoder_tuning_param->d3d_cfg.regionHeightDiv16;
-    encoder_3d_param.sParam.regionWidthDiv16 = vencoder_tuning_param->d3d_cfg.regionWidthDiv16;
-    encoder_3d_param.sParam.smallMvLevelMaxnum[0] = vencoder_tuning_param->d3d_cfg.smallMvLevelMaxnum[0];
-    encoder_3d_param.sParam.smallMvLevelMaxnum[1] = vencoder_tuning_param->d3d_cfg.smallMvLevelMaxnum[1];
-    encoder_3d_param.sParam.regionMvLevelRatioTh[0] = vencoder_tuning_param->d3d_cfg.regionMvLevelRatioTh[0];
-    encoder_3d_param.sParam.regionMvLevelRatioTh[1] = vencoder_tuning_param->d3d_cfg.regionMvLevelRatioTh[1];
-    encoder_3d_param.sParam.regionMvLevelRatioTh[2] = vencoder_tuning_param->d3d_cfg.regionMvLevelRatioTh[2];
-
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParam3DFilter, &encoder_3d_param);
-
-	struct VencROIConfig ROIConfig;
-	memset(&ROIConfig, 0, sizeof(VencROIConfig));
-	ROIConfig.index = vencoder_tuning_param->roi_cfg.roi_idx;
-	ROIConfig.bEnable = vencoder_tuning_param->roi_cfg.roi_en;
-	ROIConfig.roi_abs_flag = vencoder_tuning_param->roi_cfg.abs_qp_en;
-	ROIConfig.nQPoffset = vencoder_tuning_param->roi_cfg.roi_qp;
-	ROIConfig.sRect.nLeft = vencoder_tuning_param->roi_cfg.roi_x_bgn;
-	ROIConfig.sRect.nTop = vencoder_tuning_param->roi_cfg.roi_y_bgn;
-	ROIConfig.sRect.nWidth = vencoder_tuning_param->roi_cfg.roi_width;
-	ROIConfig.sRect.nHeight = vencoder_tuning_param->roi_cfg.roi_height;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamROIConfig, &ROIConfig);
-
-	value = vencoder_tuning_param->special_cfg.d3d_in_i_frm_en;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnD3DInIFrm, &value);
-
-	value = vencoder_tuning_param->special_cfg.i_frm_mb_rc_min_status;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnIFrmMbRcMoveStatus, &value);
-
-	value = vencoder_tuning_param->special_cfg.tight_mb_qp_en;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnTightMbQp, &value);
-
-	value_f = vencoder_tuning_param->special_cfg.weak_text_th;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamWeakTextTh, &value_f);
-
-	VencVe2IspD2DLimit Ve2IspD2DLimit;
-	memset(&Ve2IspD2DLimit, 0, sizeof(VencVe2IspD2DLimit));
-	Ve2IspD2DLimit.en_d2d_limit = vencoder_tuning_param->ve2isp_cfg.d2d_limit_en;
-	if (Ve2IspD2DLimit.en_d2d_limit > 0) {
-		Ve2IspD2DLimit.d2d_level[0] = vencoder_tuning_param->ve2isp_cfg.d2d_level[0];
-		Ve2IspD2DLimit.d2d_level[1] = vencoder_tuning_param->ve2isp_cfg.d2d_level[1];
-		Ve2IspD2DLimit.d2d_level[2] = vencoder_tuning_param->ve2isp_cfg.d2d_level[2];
-		Ve2IspD2DLimit.d2d_level[3] = vencoder_tuning_param->ve2isp_cfg.d2d_level[3];
-		Ve2IspD2DLimit.d2d_level[4] = vencoder_tuning_param->ve2isp_cfg.d2d_level[4];
-		Ve2IspD2DLimit.d2d_level[5] = vencoder_tuning_param->ve2isp_cfg.d2d_level[5];
-	}
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamVe2IspD2DLimit, &Ve2IspD2DLimit);
-
-	VencSuperFrameConfig SuperFrameConfig;
-	memset(&SuperFrameConfig, 0, sizeof(VencSuperFrameConfig));
-	SuperFrameConfig.eSuperFrameMode = vencoder_tuning_param->super_frame_cfg.super_frm_mode;
-	SuperFrameConfig.nMaxIFrameBits = vencoder_tuning_param->super_frame_cfg.super_i_frm_bits;
-	SuperFrameConfig.nMaxPFrameBits = vencoder_tuning_param->super_frame_cfg.super_p_frm_bits;
-	SuperFrameConfig.nMaxRencodeTimes = vencoder_tuning_param->super_frame_cfg.MaxReEncodeTimes;
-	SuperFrameConfig.nMaxP2IFrameBitsRatio = vencoder_tuning_param->super_frame_cfg.p2i_ratio;
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSuperFrameConfig, &SuperFrameConfig);
-
-	VencMotionSearchParam MotionSearchParam;
-	memset(&MotionSearchParam, 0, sizeof(VencMotionSearchParam));
-	MotionSearchParam.en_motion_search = vencoder_tuning_param->motion_search_cfg.motion_search_en;
-	if (MotionSearchParam.en_motion_search > 0) {
-		MotionSearchParam.dis_default_para = vencoder_tuning_param->motion_search_cfg.dis_default_para;
-		MotionSearchParam.hor_region_num = vencoder_tuning_param->motion_search_cfg.hor_region_num;
-    	MotionSearchParam.ver_region_num = vencoder_tuning_param->motion_search_cfg.ver_region_num;
-        MotionSearchParam.en_check_mv = vencoder_tuning_param->motion_search_cfg.en_check_mv;
-        MotionSearchParam.en_check_mad = vencoder_tuning_param->motion_search_cfg.en_check_mad;
-        MotionSearchParam.en_morpholog = vencoder_tuning_param->motion_search_cfg.en_morpholog;
-		MotionSearchParam.large_mv_th = vencoder_tuning_param->motion_search_cfg.large_mv_th;
-        MotionSearchParam.large_mad_th = vencoder_tuning_param->motion_search_cfg.large_mad_th;
-        MotionSearchParam.background_weight = vencoder_tuning_param->motion_search_cfg.background_weight;
-		MotionSearchParam.large_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.large_mv_ratio_th;
-		MotionSearchParam.non_zero_mv_ratio_th = vencoder_tuning_param->motion_search_cfg.non_zero_mv_ratio_th;
-		MotionSearchParam.large_mad_ratio_th = vencoder_tuning_param->motion_search_cfg.large_mad_ratio_th;
-	}
-	VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamMotionSearchParam, &MotionSearchParam);
-
-#endif
+*/
 	return VIDEOCODEC_OK;
 }
 
@@ -2213,7 +1682,6 @@ int EncoderStart(encode_param_t *encode_param, VencInputBuffer *input, VencOutpu
 {
 	int ret = 0;
 	int head_num;
-
 	if (type == VENCODE_CMD_HEAD_PPSSPS &&
 	    (encode_param->encode_format == VENC_CODEC_H264 ||
 	     encode_param->encode_format == VENC_CODEC_H265 ||
@@ -2250,8 +1718,9 @@ int EncoderStart(encode_param_t *encode_param, VencInputBuffer *input, VencOutpu
 		ret = encoder_doProcessData(encode_param, input, output);
 		if(ret)
 		{
-			EncoderClose(encode_param);
-			loge("process encoder data fail");
+			// loge("EncoderClose start");
+			// EncoderClose(encode_param);
+			// loge("process encoder data fail");
 			return VIDEOCODEC_FAIL;
 		}
 	}
@@ -2266,20 +1735,18 @@ int EncoderStart(encode_param_t *encode_param, VencInputBuffer *input, VencOutpu
 int EncoderClose(encode_param_t *encode_param)
 {
 	loge("close encoder");
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 	sem_post(&inputFrameSem);
-#endif
+
 	if(pVideoEnc)
 	{
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 		VideoEncPauseDl(pVideoEnc);
-#endif
 		VideoEncDestroyDl(pVideoEnc);
 		pVideoEnc = NULL;
 	}
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+	loge("VideoEncDestroyDl end");
+
 	sem_destroy(&inputFrameSem);
-#endif
+
 
 #ifdef VENC_DYNAMIC_LIBRARY
 	//libvencoder.so should be dlclose after other Func run
@@ -2301,36 +1768,88 @@ int EncoderClose(encode_param_t *encode_param)
 	return VIDEOCODEC_OK;
 }
 
-int EncoderGetWbYuv(encode_param_t *encode_param, unsigned char* dst_buf, unsigned int buf_size)
+int EncoderGetWbYuv(encode_param_t *encode_param, unsigned char **dst_buf, unsigned int *buf_size)
 {
-    if(pVideoEnc)
-    {
-        VencThumbInfo mThumbInfo;
-        memset(&mThumbInfo, 0, sizeof(VencThumbInfo));
-        mThumbInfo.pThumbBuf  = dst_buf;
-        mThumbInfo.nThumbSize = buf_size;
-        return VideoEncGetParameterDl(pVideoEnc, VENC_IndexParamGetThumbYUV, &mThumbInfo);
-    }
-    return 0;
+	if (pVideoEnc == NULL) {
+		return -1;
+	}
+
+	VencThumbInfo mThumbInfo;
+	memset(&mThumbInfo, 0, sizeof(mThumbInfo));
+
+	VideoEncGetParameterDl(pVideoEnc, VENC_IndexParamGetThumbYUV, &mThumbInfo);
+
+	if (mThumbInfo.nThumbSize == 0 || mThumbInfo.pThumbBuf == NULL) {
+		return -2;
+	}
+
+	*dst_buf = mThumbInfo.pThumbBuf;
+	*buf_size = mThumbInfo.nThumbSize;
+
+#if 0
+	static int step = 0;
+	FILE *wb_file = NULL;
+	char fileName[128];
+
+	if (step <= 1) {
+		snprintf(fileName, sizeof(fileName), "/tmp/wb_yuv_step%d.yuv", step);
+		wb_file = fopen(fileName, "wb");
+		if (wb_file) {
+			FWRITE(mThumbInfo.pThumbBuf, mThumbInfo.nThumbSize, 1, wb_file);
+			fclose(wb_file);
+			loge("Succed to write file");
+		} else {
+			loge("Failed to open file for writing");
+		}
+		step++;
+	}
+#endif
+	return 0;
 }
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-int EncoderSetParamSharpConfig(encode_param_t *encode_param, sEncppSharpParam* pSharpParam)
+int EncoderSetParamIspbeEnable(encode_param_t *encode_param, unsigned int ispbe)
 {
-    if(pVideoEnc && pSharpParam)
-    {
-        return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamSharpConfig, pSharpParam);
-    }
-    return 0;
+	if (pVideoEnc) {
+		unsigned int *pIspbe = &ispbe;
+		return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIspbeEn, pIspbe);
+	}
+	return 0;
 }
 
-int EncoderSetParamEnableSharp(encode_param_t *encode_param, unsigned int bEnable)
+int EncoderSetParamIspbeEmbedEnable(encode_param_t *encode_param, unsigned int embed)
 {
-    if(pVideoEnc)
-    {
-        return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamEnableEncppSharp, &bEnable);
-    }
-    return 0;
+	if (pVideoEnc) {
+		unsigned int *pEmbed = &embed;
+		return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIspbeEmbedEn, pEmbed);
+	}
+	return 0;
+}
+
+int EncoderSetParamIspbeTopConfig(encode_param_t *encode_param, sEncppIspbeTopConfig *pIspbeTopConfig)
+{
+	if(pVideoEnc)
+	{
+		return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIspbeTopConfig, pIspbeTopConfig);
+	}
+	return 0;
+}
+
+int EncoderSetParamIspbeSharpConfig(encode_param_t *encode_param, sEncppIspbeSharpConfig *pIspbeSharpConfig)
+{
+	if(pVideoEnc)
+	{
+		return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIspbeSharpConfig, pIspbeSharpConfig);
+	}
+	return 0;
+}
+
+int EncoderSetParamIspbeLdciConfig(encode_param_t *encode_param, sEncppIspbeLdciConfig *pIspbeLdciConfig)
+{
+	if(pVideoEnc)
+	{
+		return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParamIspbeLdciConfig, pIspbeLdciConfig);
+	}
+	return 0;
 }
 
 int EncoderSetParamColorSpace(encode_param_t *encode_param, VENC_COLOR_SPACE eColorSpace, unsigned int bFullFlag)
@@ -2358,16 +1877,14 @@ int EncoderSetParamColorSpace(encode_param_t *encode_param, VENC_COLOR_SPACE eCo
     }
 }
 
-#if (ISP_VERSION == 600)
-int EncoderSetParam3DFliter(encode_param_t *encode_param, s3DfilterParam *p3dFilterParam)
-{
-    if(pVideoEnc)
-    {
-        return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParam3DFilterNew, p3dFilterParam);
-    }
-    return 0;
-}
-#endif
+// int EncoderSetParam3DFliter(encode_param_t *encode_param, s3DfilterParam *p3dFilterParam)
+// {
+//     if(pVideoEnc)
+//     {
+//         return VideoEncSetParameterDl(pVideoEnc, VENC_IndexParam3DFilterNew, p3dFilterParam);
+//     }
+//     return 0;
+// }
 
 int EncoderSetParam2DFliter(encode_param_t *encode_param, s2DfilterParam *p2dFilterParam)
 {
@@ -2402,6 +1919,5 @@ int EncoderSetCallbacks(encode_param_t *encode_param, EncoderCbType* pCallbacks,
     encode_param->pAppData   = pAppData;
     return 0;
 }
-#endif
 
 

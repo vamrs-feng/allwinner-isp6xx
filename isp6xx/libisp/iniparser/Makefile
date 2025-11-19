@@ -11,7 +11,7 @@ commonSources:= \
 
 local_CFLAGS := -I./src
 
-OBJS = $(patsubst %.c, %.c.o, $(commonSources))
+OBJS = $(patsubst %.c, %.o, $(commonSources))
 
 $(SHARED_TARGET):$(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(LIBS) $(local_CFLAGS) -o $@ $^ -fPIC -shared
@@ -19,7 +19,7 @@ $(SHARED_TARGET):$(OBJS)
 $(STATIC_TARGET):$(OBJS)
 	$(AR) rc $@ $^
 
-$(OBJS):%.c.o:%.c
+$(OBJS):%.o:%.c
 	$(CC) $(CFLAGS) $(LDFLAGS) $(local_CFLAGS) -c $< -o $@ -fPIC
 
 install: $(TARGET)

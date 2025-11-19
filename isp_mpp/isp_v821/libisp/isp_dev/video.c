@@ -309,8 +309,9 @@ int video_set_fmt(struct isp_video_device *video, struct video_fmt *vfmt)
 	memset(&speeddn_cfg, 0, sizeof speeddn_cfg);
 	speeddn_cfg.pix_num = vfmt->pixel_num;
 	speeddn_cfg.tdm_speed_down_en = vfmt->tdm_speed_down_en;
-	speeddn_cfg.tdm_tx_valid_num = 1;
-	speeddn_cfg.tdm_tx_invalid_num = 0;
+	speeddn_cfg.tdm_tx_valid_num = vfmt->tdm_tx_valid_num;
+	speeddn_cfg.tdm_tx_invalid_num = vfmt->tdm_tx_invalid_num;
+	speeddn_cfg.tdm_tx_valid_num_offset = vfmt->tdm_tx_valid_num_offset;
 	if (-1 == ioctl(video->entity->fd, VIDIOC_SET_TDM_SPEEDDN_CFG, &speeddn_cfg)) {
 		ISP_ERR("VIDIOC_SET_TDM_SPEEDDN_CFG error!\n");
 		return -1;
@@ -333,7 +334,23 @@ int video_set_fmt(struct isp_video_device *video, struct video_fmt *vfmt)
 	if (vfmt->tdm_rxbuf_cnt) {
 		if (-1 == ioctl(video->entity->fd, VIDIOC_SET_TDM_RXBUF_CNT, &vfmt->tdm_rxbuf_cnt)) {
 				ISP_ERR("VIDIOC_SET_TDM_RXBUF_CNT %d error!\n", vfmt->tdm_rxbuf_cnt);
-			}
+		}
+	}
+
+	if (1 == vfmt->nbufs) {
+		if (ioctl(video->entity->fd, VIDIOC_VIN_SET_BUFFER_MODE, &vfmt->nbufs)) {
+			ISP_ERR("VIDIOC_SET_BUFFER_MODE fail %d error!\n", vfmt->nbufs);
+		}
+	}
+
+	return 0;
+}
+
+int video_set_vbv_share_yuv(struct isp_video_device *video, unsigned int enable)
+{
+	if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_SET_VBV_SHARE_YUV, &enable)) {
+		ISP_ERR("VIDIOC_VIN_SET_VBV_SHARE_YUV error!\n");
+		return -1;
 	}
 
 	return 0;

@@ -86,6 +86,7 @@ struct isp_test_param {
 	HW_S8 gtm_en;
 	HW_S8 gamma_en;
 	HW_S8 cem_en;
+	HW_S8 encpp_top_en;
 	HW_S8 encpp_sharp_en;
 	HW_S8 encpp_ldci_en;
 	HW_S8 enc_3dnr_en;
@@ -156,6 +157,7 @@ struct isp_3a_param {
 	HW_S32 awb_special_color_info[80];
 	HW_S32 awb_preset_gain[22];
 	HW_S16 local_wb_coef;
+	HW_S16 complex_light_sat_coef;
 	HW_S16 awb_stat_mode;
 	HW_S16 awb_reserve_0;
 	HW_S16 awb_reserve_1;
@@ -202,6 +204,7 @@ struct isp_dynamic_config {
 #ifdef USE_ENCPP
 	HW_S16 encpp_sharp_cfg[ENCPP_SHARP_MAX];
 	HW_S16 encpp_ldci_cfg[ENCPP_LDCI_MAX];
+	HW_S16 encpp_top_cfg[ENCPP_TOP_MAX];
 	HW_S16 encoder_denoise_cfg[ENCODER_DENOISE_MAX];
 #endif
 	HW_S16 denoise_cfg[ISP_DENOISE_MAX];
@@ -220,6 +223,7 @@ struct isp_dynamic_config {
 	HW_S16 cfa_cfg[ISP_CFA_MAX];
 	HW_S16 shading_comp;
 	HW_S16 awb_cfg[ISP_AWB_MAX];
+	HW_S16 nrp_cfg[ISP_NRP_MAX];
 
 	/*Curve*/
 	HW_S16 d2d_lp0_nr_yth[ISP_REG_TBL_LENGTH_32];
@@ -241,6 +245,7 @@ typedef struct isp_param_triger {
 #ifdef USE_ENCPP
 	enum isp_triger_type encpp_sharp_triger;
 	enum isp_triger_type encpp_ldci_triger;
+	enum isp_triger_type encpp_top_triger;
 	enum isp_triger_type encoder_denoise_triger;
 #endif
 	enum isp_triger_type denoise_triger;
@@ -259,6 +264,7 @@ typedef struct isp_param_triger {
 	enum isp_triger_type cfa_triger;
 	enum isp_triger_type shading_triger;
 	enum isp_triger_type awb_triger;
+	enum isp_triger_type nrp_triger;
 } isp_dynamic_triger_t;
 
 struct isp_dynamic_param {
@@ -316,6 +322,8 @@ struct isp_tunning_param {
 	HW_S8 fpn_pfpn_phase_lut[ISP_PFPN_TBL_SIZE];
 	HW_U8 fpn_pfpn_period_lut[ISP_PFPN_TBL_SIZE];
 	HW_S8 fpn_pfpn_offset_lut[ISP_PFPN_TBL_SIZE];
+	HW_S32 fpn_cfpn_lw_th;
+	HW_S32 fpn_cfpn_hi_th;
 
 	/*dpc*/
 	HW_U16 dpc_comm_cfg[ISP_DPC_COMM_MAX];

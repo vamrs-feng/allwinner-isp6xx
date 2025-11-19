@@ -1054,9 +1054,9 @@ int isp_sensor_get_fps(struct hw_isp_device *isp, struct sensor_fps *fps)
 	int ret;
 
 	ret = ioctl(isp->sensor.fd, VIDIOC_VIN_SENSOR_GET_FPS, fps);
-	if (ret < 0)
-		ISP_ERR("%s get fps failed: %s (%d).\n",
-			isp->sensor.info.name, strerror(errno), errno);
+	//if (ret < 0)
+	//	ISP_ERR("%s get fps failed: %s (%d).\n",
+	//		isp->sensor.info.name, strerror(errno), errno);
 
 	return ret;
 }

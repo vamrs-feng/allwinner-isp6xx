@@ -28,29 +28,61 @@
 #include "zlib.h"
 
 #if (ISP_VERSION == 610)
-#if defined(SENSOR_GC2083) || defined(SENSOR_GC4663) || defined(SENSOR_SC485SL) || defined(SENSOR_SC635HAI)
+#if defined(SENSOR_CV2003) || defined(SENSOR_SC231HAI) || defined(SENSOR_SC235HAI) ||  defined(SENSOR_GC2083) || \
+	defined(SENSOR_GC4663) || defined(SENSOR_GC8613) || defined(SENSOR_SC485SL) || defined(SENSOR_SC635HAI) ||  \
+	defined(SENSOR_SC2337P) || defined(SENSOR_CV8002)
+
+#ifdef SENSOR_CV2003
+#include "SENSOR_H/cv2003/cv2003_mipi_isp610_20251018_194909.h"
+#include "SENSOR_H/cv2003/cv2003_mipi_isp610_20251018_194909_ir.h"
+#endif
+
+#ifdef SENSOR_SC231HAI
+#include "SENSOR_H/sc231hai/sc231hai_mipi_default_ini_isp610.h"
+#endif
+
+#ifdef SENSOR_SC2337P
+#include "SENSOR_H/sc2337p/sc2337p_mipi_default_ini_isp610.h"
+#include "SENSOR_H/sc2337p/sc2337p_mipi_default_ini_ir_isp610.h"
+#include "SENSOR_H/sc2337p/sc2337p_mipi_isp610_20251024_210107_aiisp.h"
+#endif
+
+#ifdef SENSOR_SC235HAI
+#include "SENSOR_H/sc235hai/sc235hai_mipi_default_ini_isp610.h"
+#include "SENSOR_H/sc235hai/sc235hai_mipi_isp610_20251107_194732_aiisp.h"
+#endif
 
 #ifdef SENSOR_GC2083
-#include "SENSOR_H/gc2083/gc2083_mipi_default_ini_v855.h"
+#include "SENSOR_H/gc2083/gc2083_mipi_default_ini_isp610.h"
+#endif
+
+#ifdef SENSOR_GC8613
+#include "SENSOR_H/gc8613/gc8613_mipi_isp610_20251025_163823.h"
 #endif
 
 #ifdef SENSOR_SC485SL
-#include "SENSOR_H/sc485sl/sc485sl_mipi_default_int_v855.h"
+#include "SENSOR_H/sc485sl/sc485sl_mipi_isp610_20251025_154325.h"
+#include "SENSOR_H/sc485sl/sc485sl_mipi_isp610_20251024_192746_aiisp.h"
 #endif
 
 #ifdef SENSOR_GC4663
-#include "SENSOR_H/gc4663_mipi_default_ini_v855.h"
+#include "SENSOR_H/gc4663/gc4663_mipi_default_ini_isp610.h"
 #endif
 
 #ifdef SENSOR_SC635HAI
-#include "SENSOR_H/sc635hai/sc635hai_mipi_default_int_v855.h"
+#include "SENSOR_H/sc635hai/sc635hai_mipi_default_int_isp610.h"
+#endif
+
+#ifdef SENSOR_CV8002
+#include "SENSOR_H/cv8002/cv8002_mipi_isp610_20251014_192326.h"
+#include "SENSOR_H/cv8002/cv8002_mipi_isp610_20251014_202353_ir.h"
 #endif
 
 #else
-#include "SENSOR_H/gc4663_mipi_default_ini_v855.h"
+#include "SENSOR_H/gc4663/gc4663_mipi_default_ini_isp610.h"
 #endif
 #else
-#include "SENSOR_H/gc4663_mipi_default_ini_v855.h"
+#include "SENSOR_H/gc4663/gc4663_mipi_default_ini_isp610.h"
 #endif
 
 #define ISP_TUNING_ENABLE 1
@@ -1012,28 +1044,60 @@ int isp_parser_tbl(struct isp_param_config *isp_ini_cfg, char *tbl_patch)
 
 struct isp_cfg_array cfg_arr[] = {
 #if (ISP_VERSION == 610)
-#if defined(SENSOR_GC2083) || defined(SENSOR_GC4663) || defined(SENSOR_SC485SL) || defined(SENSOR_SC635HAI)
+#if defined(SENSOR_CV2003) || defined(SENSOR_SC231HAI) || defined(SENSOR_SC235HAI) || defined(SENSOR_GC2083) || \
+	defined(SENSOR_GC4663) || defined(SENSOR_SC485SL) || defined(SENSOR_SC635HAI) ||  defined(SENSOR_GC8613) || \
+	defined(SENSOR_SC2337P) || defined(SENSOR_CV8002)
+#ifdef SENSOR_CV2003
+	{"cv2003_mipi",  "cv2003_mipi_isp610_20251018_194909", 1920, 1080, 15, 0, 0, &cv2003_mipi_isp_cfg},
+	{"cv2003_mipi",  "cv2003_mipi_isp610_20251018_194909_ir", 1920, 1080, 15, 0, 1, &cv2003_mipi_ir_isp_cfg},
+#endif
+
+#ifdef SENSOR_SC231HAI
+	{"sc231hai_mipi",  "sc231hai_mipi_default_ini_isp610", 1920, 1080, 30, 0, 0, &sc231hai_mipi_isp_cfg},
+#endif
+
+#ifdef SENSOR_SC2337P
+	{"sc2337p_mipi",  "sc2337p_mipi_default_ini_isp610", 1920, 1080, 30, 0, 0, &sc2337p_mipi_isp_cfg},
+	{"sc2337p_mipi",  "sc2337p_mipi_default_ini_ir_isp610", 1920, 1080, 30, 0, 1, &sc2337p_mipi_ir_isp_cfg},
+	{"sc2337p_mipi",  "sc2337p_mipi_isp610_20251024_210107_aiisp", 1920, 1080, 15, 0, 2, &sc2337p_mipi_ai_isp_cfg},
+#endif
+
+#ifdef SENSOR_SC235HAI
+	{"sc235hai_mipi",  "sc235hai_mipi_default_ini_isp610", 1920, 1080, 30, 0, 0, &sc235hai_mipi_isp_cfg},
+	{"sc235hai_mipi",  "sc235hai_mipi_isp610_20251107_194732_aiisp", 1920, 1080, 15, 0, 2, &sc235hai_mipi_ai_isp_cfg},
+#endif
+
 #ifdef SENSOR_GC2083
-	{"gc2083_mipi",  "gc2083_mipi_default_ini_v855", 1920, 1088, 15, 0, 0, &gc2083_mipi_v855_isp_cfg},
+	{"gc2083_mipi",  "gc2083_mipi_default_ini_isp610", 1920, 1080, 15, 0, 0, &gc2083_mipi_isp_cfg},
 #endif
 
 #ifdef SENSOR_GC4663
-	{"gc4663_mipi", "gc4663_mipi_default_ini_v855", 2560, 1440, 15, 0, 0, &gc4663_mipi_v855_isp_cfg},
+	{"gc4663_mipi", "gc4663_mipi_default_ini_isp610", 2560, 1440, 15, 0, 0, &gc4663_mipi_isp_cfg},
+#endif
+
+#ifdef SENSOR_GC8613
+	{"gc8613_mipi", "gc8613_mipi_isp610_20251025_163823", 3840, 2160, 15, 0, 0, &gc8613_mipi_isp_cfg},
 #endif
 
 #ifdef SENSOR_SC485SL
-	{"sc485SL_mipi", "sc485sl_mipi_default_ini_v855", 2688, 1520, 15, 0, 0, &sc485sl_mipi_v855_isp_cfg},
+	{"sc485sl_mipi", "sc485sl_mipi_isp610_20251025_154325", 2688, 1520, 25, 0, 0, &sc485sl_mipi_isp_cfg},
+	{"sc485sl_mipi", "sc485sl_mipi_isp610_20251024_192746_aiisp", 2688, 1520, 10, 0, 2, &sc485sl_mipi_ai_isp_cfg},
 #endif
 
 #ifdef SENSOR_SC635HAI
-	{"sc635hai_mipi", "sc635hai_mipi_default_ini_v855", 3200, 1800, 30, 0, 0, &sc635hai_mipi_v855_isp_cfg},
+	{"sc635hai_mipi", "sc635hai_mipi_default_ini_isp610", 3200, 1800, 30, 0, 0, &sc635hai_mipi_isp_cfg},
+#endif
+
+#ifdef SENSOR_CV8002
+	{"cv8002_mipi", "cv8002_mipi_isp610_20251014_192326", 3840, 2160, 15, 0, 0, &cv8002_mipi_isp_cfg},
+	{"cv8002_mipi", "cv8002_mipi_isp610_20251014_202353_ir", 3840, 2160, 15, 0, 0, &cv8002_mipi_ir_isp_cfg},
 #endif
 
 #else
-	{"gc4663_mipi", "gc4663_mipi_default_ini_v855", 2560, 1440, 15, 0, 0, &gc4663_mipi_v855_isp_cfg},
+	{"gc4663_mipi", "gc4663_mipi_default_ini_isp610", 2560, 1440, 15, 0, 0, &gc4663_mipi_isp_cfg},
 #endif
 #else
-	{"gc4663_mipi", "gc4663_mipi_default_ini_v855", 2560, 1440, 15, 0, 0, &gc4663_mipi_v855_isp_cfg},
+	{"gc4663_mipi", "gc4663_mipi_default_ini_isp610", 2560, 1440, 15, 0, 0, &gc4663_mipi_isp_cfg},
 #endif
 };
 

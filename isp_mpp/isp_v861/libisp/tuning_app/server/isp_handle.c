@@ -165,7 +165,7 @@ int select_isp_stitch_mode(int isp_id, enum stitch_mode_t stitch_mode)
 	isp_set_stitch_mode(isp_id, stitch_mode);
 	switch (stitch_mode)
 	{
-	case STITCH_2IN1_LINNER:
+	case STITCH_2IN1_LINEAR:
 		if (isp_id % 2 == 0)
 			ret = isp_set_sync((1<<(isp_id)) | (1<<(isp_id + 1)));
 		else
@@ -791,10 +791,10 @@ void convert_tuning_cfg_func(HW_U8 group_id, HW_U32 cfg_ids, unsigned char *cfg_
 		}
 		if (cfg_ids & HW_ISP_CFG_TUNING_FPN_COMM) {
 			DD("tuning fpn comm: ");
-			char_ptr = (HW_S8 *)cfg_data;
-			attr_len = sizeof(struct isp_tuning_fpn_comm_cfg) / sizeof(HW_S8);
-			for (i = 0; i < attr_len; i++, char_ptr++) {
-				DD("%d ", *char_ptr);
+			int_ptr = (HW_S32 *)cfg_data;
+			attr_len = sizeof(struct isp_tuning_fpn_comm_cfg) / sizeof(HW_S32);
+			for (i = 0; i < attr_len; i++, int_ptr++) {
+				*int_ptr = cvt_long(*int_ptr);
 			}
 			/* offset */
 			cfg_data += sizeof(struct isp_tuning_fpn_comm_cfg);
@@ -1348,6 +1348,28 @@ void convert_tuning_cfg_func(HW_U8 group_id, HW_U32 cfg_ids, unsigned char *cfg_
 			/* offset */
 			cfg_data += sizeof(struct isp_dynamic_encpp_ldci_cfg);
 		}
+		if (cfg_ids & HW_ISP_CFG_DYNAMIC_ENCPP_TOP) {
+			DD("dynamic encpp top: ");
+			short_ptr = (HW_S16 *)cfg_data;
+			attr_len = sizeof(struct isp_dynamic_encpp_top_cfg) / sizeof(HW_S16);
+			for (i = 0; i < attr_len; i++, short_ptr++) {
+				*short_ptr = cvt_short(*short_ptr);
+			}
+			DD("\n");
+			/* offset */
+			cfg_data += sizeof(struct isp_dynamic_encpp_top_cfg);
+		}
+		if (cfg_ids & HW_ISP_CFG_DYNAMIC_NRP) {
+			DD("dynamic nrp: ");
+			short_ptr = (HW_S16 *)cfg_data;
+			attr_len = sizeof(struct isp_dynamic_nrp_cfg) / sizeof(HW_S16);
+			for (i = 0; i < attr_len; i++, short_ptr++) {
+				*short_ptr = cvt_short(*short_ptr);
+			}
+			DD("\n");
+			/* offset */
+			cfg_data += sizeof(struct isp_dynamic_nrp_cfg);
+		}
 		break;
 	case HW_ISP_CFG_TUNING_ENCODER:
 		if (cfg_ids & HW_VENCODER_CFG_TUNING_BASE)
@@ -1697,6 +1719,29 @@ void output_3a_info(const void *stat_info, int type)
 #endif
 }
 
+void get_statistics_tbl_size(int type, int *tbl_w, int *tbl_h)
+{
+	if (SOCK_CMD_STAT_AE == type) {
+		*tbl_w = ISP_AE_COL;
+		*tbl_h = ISP_AE_ROW;
+	} else if (SOCK_CMD_STAT_AWB == type) {
+		*tbl_w = ISP_AWB_COL;
+		*tbl_h = ISP_AWB_ROW;
+	} else if (SOCK_CMD_STAT_AF == type) {
+		*tbl_w = ISP_AF_COL;
+		*tbl_h = ISP_AF_ROW;
+	} else if (SOCK_CMD_STAT_TDNF == type) {
+		*tbl_w = ISP_D3D_K_COL;
+		*tbl_h = ISP_D3D_K_ROW;
+	} else if (SOCK_CMD_STAT_MOTION_TEXTURE == type) {
+		*tbl_w = ISP_MOT_TEX_COL;
+		*tbl_h = ISP_MOT_TEX_ROW;
+	} else {
+		ISP_ERR("unknown type\n");
+	}
+}
+
+#if 0
 void hton_3a_info(void *stat_info, int type)
 {
 	if (stat_info) {
@@ -1788,7 +1833,7 @@ void hton_3a_info(void *stat_info, int type)
 		}
 	}
 }
-#if 0
+
 void ntoh_3a_info(void *stat_info, int type)
 {
 	if (stat_info) {
@@ -2783,6 +2828,19 @@ re_try:
 			return -1;
 		}
 
+		sprintf(isp_cfg_path, "%sisp%d_%d_%d_%d_%d/3a_stat/mot_tex", ini_cfg.base_path, ini_cfg.sensor_cfg.isp, ini_cfg.sensor_cfg.width, ini_cfg.sensor_cfg.height,
+			ini_cfg.sensor_cfg.fps, ini_cfg.sensor_cfg.wdr);
+		fd = fopen(isp_cfg_path, "r");
+		if (fd) {
+			fread(&stats_ctx->stats.mot_tex_stats, sizeof(struct isp_mot_tex_stats_s), 1, fd);
+
+			fclose(fd);
+			fd = NULL;
+		} else {
+			ISP_ERR("%s open failed\n", isp_cfg_path);
+			return -1;
+		}
+
 		sprintf(isp_cfg_path, "%sisp%d_%d_%d_%d_%d/3a_stat/flag", ini_cfg.base_path, ini_cfg.sensor_cfg.isp, ini_cfg.sensor_cfg.width, ini_cfg.sensor_cfg.height,
 					ini_cfg.sensor_cfg.fps, ini_cfg.sensor_cfg.wdr);
 		fd = fopen(isp_cfg_path, "w+");
@@ -2859,7 +2917,8 @@ HW_S32 get_log_params(int dev_id, unsigned char *buffer)
 		}
 
 		log_cfg->pltm_log.pltm_auto_stren = ctx->pltm_entity_ctx.pltm_result.pltm_auto_stren;
-		log_cfg->pltm_log.pltm_sharp_ss_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_sharp_ss_compensation;
+		log_cfg->pltm_log.pltm_sharp_hs_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_sharp_hs_compensation;
+		log_cfg->pltm_log.pltm_sharp_ms_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_sharp_ms_compensation;
 		log_cfg->pltm_log.pltm_sharp_ls_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_sharp_ls_compensation;
 		log_cfg->pltm_log.pltm_d2d_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_d2d_compensation;
 		log_cfg->pltm_log.pltm_d3d_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_d3d_compensation;

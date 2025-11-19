@@ -177,6 +177,8 @@ typedef enum {
 	HW_ISP_CFG_DYNAMIC_SHADING                 = 0x00200000,
 	HW_ISP_CFG_DYNAMIC_AWB                     = 0x00400000,
 	HW_ISP_CFG_DYNAMIC_ENCPP_LDCI              = 0x00800000,
+	HW_ISP_CFG_DYNAMIC_ENCPP_TOP               = 0x01000000,
+	HW_ISP_CFG_DYNAMIC_NRP                     = 0x02000000,
 } hw_isp_cfg_dynamic_ids;
 
 typedef enum {
@@ -211,7 +213,7 @@ typedef enum {
 	ISP_CTRL_WB_MGAIN,
 	ISP_CTRL_AGAIN_DGAIN,
 	ISP_CTRL_COLOR_EFFECT,
-	ISP_CTRL_AE_ROI,
+	ISP_CTRL_AE_ROI, //10
 	ISP_CTRL_AF_METERING,
 	ISP_CTRL_COLOR_TEMP,
 	ISP_CTRL_EV_IDX,
@@ -221,7 +223,7 @@ typedef enum {
 	ISP_CTRL_COLOR_SPACE,
 	ISP_CTRL_VENC2ISP_PARAM,
 	ISP_CTRL_NPU_NR_PARAM,
-	ISP_CTRL_TOTAL_GAIN,
+	ISP_CTRL_TOTAL_GAIN, //20
 	ISP_CTRL_AE_EV_LV,
 	ISP_CTRL_AE_EV_LV_ADJ,
 	ISP_CTRL_AE_WEIGHT_LUM,
@@ -231,7 +233,7 @@ typedef enum {
 	ISP_CTRL_SET_AE_TARGER,
 	ISP_CTRL_SET_AE_WEIGHT,
 	ISP_CTRL_AE_TABLE,
-	ISP_CTRL_AE_STATS,
+	ISP_CTRL_AE_STATS, //30
 	ISP_CTRL_IR_STATUS,
 	ISP_CTRL_IR_AWB_GAIN,
 	ISP_CTRL_READ_BIN_PARAM,
@@ -242,9 +244,10 @@ typedef enum {
 
 typedef enum {
 	/*encpp_ctrl*/
-	ISP_CTRL_ENCPP_TOP_CFG = 0,
-	ISP_CTRL_ENCPP_SHARP_CFG,
-	ISP_CTRL_ENCPP_LDCI_CFG,
+	ISP_CTRL_ENCPP_ISPBE_ENABLE = 0,
+	ISP_CTRL_ENCPP_ISPBE_TOP_CFG,
+	ISP_CTRL_ENCPP_ISPBE_SHARP_CFG,
+	ISP_CTRL_ENCPP_ISPBE_LDCI_CFG,
 	ISP_CTRL_ENCODER_3DNR_CFG,
 	ISP_CTRL_ENCODER_2DNR_CFG,
 } hw_encpp_ctrl_cfg_ids;
@@ -324,6 +327,7 @@ struct isp_test_enable_cfg {
 	HW_S8 gtm;
 	HW_S8 gamma;
 	HW_S8 cem;
+	HW_S8 encpp_top;
 	HW_S8 encpp_sharp;
 	HW_S8 encpp_ldci;
 	HW_S8 enc_3dnr;
@@ -445,6 +449,7 @@ struct isp_awb_preset_gain_cfg {
 
 struct isp_awb_favor_cfg {
 	HW_S32		local_wb_coef;
+	HW_S32		complex_light_sat_coef;
 	HW_S32		awb_stat_mode;
 	HW_S32		awb_reserve_0;
 	HW_S32		awb_reserve_1;
@@ -642,12 +647,14 @@ struct isp_tuning_sensor_temp_cfg {
 };
 
 struct isp_tuning_fpn_comm_cfg {
-	HW_S8 pfpn_en;
-	HW_S8 cfpn_en;
-	HW_S8 pfpn_cluster_size;
-	HW_S8 pfpn_phase_lut[ISP_PFPN_TBL_SIZE];
-	HW_U8 pfpn_period_lut[ISP_PFPN_TBL_SIZE];
-	HW_S8 pfpn_offset_lut[ISP_PFPN_TBL_SIZE];
+	HW_S32 pfpn_en;
+	HW_S32 cfpn_en;
+	HW_S32 pfpn_cluster_size;
+	HW_S32 pfpn_phase_lut[ISP_PFPN_TBL_SIZE];
+	HW_S32 pfpn_period_lut[ISP_PFPN_TBL_SIZE];
+	HW_S32 pfpn_offset_lut[ISP_PFPN_TBL_SIZE];
+	HW_S32 cfpn_lw_th;
+	HW_S32 cfpn_hi_th;
 };
 
 struct isp_tuning_encpp_top_comm_cfg {
@@ -1236,11 +1243,7 @@ struct isp_dynamic_encpp_sharp_ndir_ms_item {
 };
 
 struct isp_dynamic_encpp_sharp_comm_item {
-	HW_S16		value[ENCPP_SHARP_CNR_RATIO - ENCPP_SHARP_NDIR_HS_MIX_LW_CLIP];
-};
-
-struct isp_dynamic_encpp_sharp_denoise_item {
-	HW_S16		value[ENCPP_SHARP_MAX - ENCPP_SHARP_CNR_RATIO];
+	HW_S16		value[ENCPP_SHARP_MAX - ENCPP_SHARP_NDIR_HS_MIX_LW_CLIP];
 };
 
 struct isp_dynamic_encpp_sharp_cfg {
@@ -1250,7 +1253,6 @@ struct isp_dynamic_encpp_sharp_cfg {
 	struct isp_dynamic_encpp_sharp_dir_ms_item tuning_dir_ms_cfg[ISP_DYNAMIC_GROUP_COUNT];
 	struct isp_dynamic_encpp_sharp_ndir_ms_item tuning_ndir_ms_cfg[ISP_DYNAMIC_GROUP_COUNT];
 	struct isp_dynamic_encpp_sharp_comm_item tuning_comm_cfg[ISP_DYNAMIC_GROUP_COUNT];
-	struct isp_dynamic_encpp_sharp_denoise_item tuning_denoise_cfg[ISP_DYNAMIC_GROUP_COUNT];
 };
 
 struct isp_dynamic_encoder_denoise_3dnr_item {
@@ -1308,6 +1310,24 @@ struct isp_dynamic_encpp_ldci_cfg {
 	struct isp_dynamic_encpp_ldci_item tuning_cfg[ISP_DYNAMIC_GROUP_COUNT];
 };
 
+struct isp_dynamic_encpp_top_item {
+	HW_S16		value[ENCPP_TOP_MAX];
+};
+
+struct isp_dynamic_encpp_top_cfg {
+	HW_S16		trigger;
+	struct isp_dynamic_encpp_top_item tuning_cfg[ISP_DYNAMIC_GROUP_COUNT];
+};
+
+struct isp_dynamic_nrp_item {
+	HW_S16		value[ISP_NRP_MAX];
+};
+
+struct isp_dynamic_nrp_cfg {
+	HW_S16		trigger;
+	struct isp_dynamic_nrp_item tuning_cfg[ISP_DYNAMIC_GROUP_COUNT];
+};
+
 /* isp_dynamic_param cfg */
 struct isp_dynamic_param_cfg {
 	struct isp_dynamic_single_cfg           lum_mapping_point;      /* id: 0x0500000001 */
@@ -1331,6 +1351,8 @@ struct isp_dynamic_param_cfg {
 	struct isp_dynamic_shading_cfg          shading;                /* id: 0x0500200000 */
 	struct isp_dynamic_awb_cfg              awb;                    /* id: 0x0500400000 */
 	struct isp_dynamic_encpp_ldci_cfg       encpp_ldci;             /* id: 0x0500800000 */
+	struct isp_dynamic_encpp_top_cfg        encpp_top;              /* id: 0x0501000000 */
+	struct isp_dynamic_nrp_cfg              nrp;                    /* id: 0x0502000000 */
 };
 
 struct isp_params_cfg {
@@ -1392,7 +1414,8 @@ struct isp_iso_log_cfg {
 
 struct isp_pltm_log_cfg {
 	HW_U16 pltm_auto_stren;
-	HW_U16 pltm_sharp_ss_compensation;
+	HW_U16 pltm_sharp_hs_compensation;
+	HW_U16 pltm_sharp_ms_compensation;
 	HW_U16 pltm_sharp_ls_compensation;
 	HW_U16 pltm_d2d_compensation;
 	HW_U16 pltm_d3d_compensation;

@@ -34,6 +34,8 @@
 #elif (ISP_VERSION == 601)
 #include "SENSOR_H/imx319_mipi_default_ini_a523.h"
 #include "SENSOR_H/s5k5e8_default_ini_a523.h"
+#include "SENSOR_H/imx386_mipi_default_ini_capture_a523.h"
+#include "SENSOR_H/imx386_mipi_default_ini_video_a523.h"
 #elif (ISP_VERSION == 602)
 #include "SENSOR_H/ov13850_mipi_default_ini_a733.h"
 #include "SENSOR_H/ov13850_mipi_default_ini_video_a733.h"
@@ -935,6 +937,8 @@ struct isp_cfg_array cfg_arr[] = {
 #elif (ISP_VERSION == 601)
 	{"s5k5e8", "s5k5e8_default_ini_a523", 2592, 1944, 30, 0, 0, &s5k5e8_a523_isp_cfg},
 	{"imx319_mipi", "imx319_mipi_default_ini_a523", 3264, 2448, 30, 0, 0, &imx319_mipi_isp_cfg},
+	{"imx386_mipi", "imx386_mipi_default_ini_a523", 3840, 2160, 30, 0, 0, &imx386_mipi_capture_isp_cfg},
+	{"imx386_mipi", "imx386_mipi_default_ini_a523", 1920, 1080, 30, 0, 0, &imx386_mipi_video_isp_cfg},
 #elif (ISP_VERSION == 602)
 	{"ov13850_mipi", "ov13850_mipi_default_ini_a733", 4224, 3136, 30, 0, 0, &ov13850_mipi_isp_cfg},
 	{"ov13850_mipi", "ov13850_mipi_default_ini_a733", 4224, 3136, 18, 0, 0, &ov13850_mipi_capture_isp_cfg},

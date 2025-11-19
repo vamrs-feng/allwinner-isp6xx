@@ -20,11 +20,8 @@ LOCAL_SHARED_LIBS :=
 LOCAL_STATIC_LIBS :=
 
 #set dst file name: shared library, static library, execute bin.
-ifeq ($(LIBISP_CFG_COMPILE_DYNAMIC_LIB), Y)
-LOCAL_TARGET_DYNAMIC := libisp_ini
-else
+LOCAL_TARGET_DYNAMIC := 
 LOCAL_TARGET_STATIC := libisp_ini
-endif
 LOCAL_TARGET_BIN :=
 
 #generate include directory flags for gcc.
@@ -34,6 +31,10 @@ inc_paths := $(foreach inc,$(filter-out -I%,$(INCLUDE_DIRS)),$(addprefix -I, $(i
 LOCAL_CFLAGS := $(CFLAGS) $(inc_paths) -fPIC -Wall
 #Extra flags to give to the C++ compiler
 LOCAL_CXXFLAGS := $(CXXFLAGS) $(inc_paths) -fPIC -Wall
+ifeq ($(findstring cv2003,$(SENSOR_NAME)), cv2003)
+    LOCAL_CFLAGS += -DSENSOR_CV2003=1
+    LOCAL_CXXFLAGS += -DSENSOR_CV2003=1
+endif
 ifeq ($(findstring imx386,$(SENSOR_NAME)), imx386)
     LOCAL_CFLAGS += -DSENSOR_IMX386=1
     LOCAL_CXXFLAGS += -DSENSOR_IMX386=1
@@ -67,6 +68,10 @@ ifeq ($(findstring gc2083,$(SENSOR_NAME)), gc2083)
     LOCAL_CFLAGS += -DSENSOR_GC2083=1
     LOCAL_CXXFLAGS += -DSENSOR_GC2083=1
 endif
+ifeq ($(findstring gc8613,$(SENSOR_NAME)), gc8613)
+    LOCAL_CFLAGS += -DSENSOR_GC8613=1
+    LOCAL_CXXFLAGS += -DSENSOR_GC8613=1
+endif
 ifeq ($(findstring f37p,$(SENSOR_NAME)), f37p)
     LOCAL_CFLAGS += -DSENSOR_F37P=1
     LOCAL_CXXFLAGS += -DSENSOR_F37P=1
@@ -86,6 +91,10 @@ endif
 ifeq ($(findstring sc2336,$(SENSOR_NAME)), sc2336)
     LOCAL_CFLAGS += -DSENSOR_SC2336=1
     LOCAL_CXXFLAGS += -DSENSOR_SC2336=1
+endif
+ifeq ($(findstring sc2337p,$(SENSOR_NAME)), sc2337p)
+    LOCAL_CFLAGS += -DSENSOR_SC2337P=1
+    LOCAL_CXXFLAGS += -DSENSOR_SC2337P=1
 endif
 ifeq ($(findstring sc2355,$(SENSOR_NAME)), sc2355)
     LOCAL_CFLAGS += -DSENSOR_sc2355=1
@@ -139,13 +148,25 @@ ifeq ($(findstring sc200ai_8bit,$(SENSOR_NAME)), sc200ai_8bit)
     LOCAL_CXXFLAGS += -DSENSOR_SC200AI_8BIT=1
 endif
 endif
+ifeq ($(findstring sc231hai,$(SENSOR_NAME)), sc231hai)
+    LOCAL_CFLAGS += -DSENSOR_SC231HAI=1
+    LOCAL_CXXFLAGS += -DSENSOR_SC231HAI=1
+endif
+ifeq ($(findstring sc235hai,$(SENSOR_NAME)), sc235hai)
+    LOCAL_CFLAGS += -DSENSOR_SC235HAI=1
+    LOCAL_CXXFLAGS += -DSENSOR_SC235HAI=1
+endif
 ifeq ($(findstring sc485sl,$(SENSOR_NAME)), sc485sl)
     LOCAL_CFLAGS += -DSENSOR_SC485SL=1
     LOCAL_CXXFLAGS += -DSENSOR_SC485SL=1
 endif
 ifeq ($(findstring sc635hai,$(SENSOR_NAME)), sc635hai)
     LOCAL_CFLAGS += -DSENSOR_SC635HAI=1
-    LOCAL_CXXFLAGS += -DSENSOR_SC635HAIL=1
+    LOCAL_CXXFLAGS += -DSENSOR_SC635HAI=1
+endif
+ifeq ($(findstring cv8002,$(SENSOR_NAME)), cv8002)
+    LOCAL_CFLAGS += -DSENSOR_CV8002=1
+    LOCAL_CXXFLAGS += -DSENSOR_CV8002=1
 endif
 #Extra flags to give to the C preprocessor and programs that use it (the C and Fortran compilers).
 LOCAL_CPPFLAGS := $(CPPFLAGS) $(LIBISP_CFG_CFLAGS)

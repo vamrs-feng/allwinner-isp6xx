@@ -33,11 +33,16 @@
 	defined(SENSOR_F37P) || defined(SENSOR_SC2336) || defined(SENSOR_SC3336)|| \
 	defined(SENSOR_SC200AI) || defined(SENSOR_BF2257CS) || defined(SENSOR_IMX258) || \
 	defined(SENSOR_GC4663) || defined(SENSOR_F58) || defined(SENSOR_OS02G10) || defined(SENSOR_SC1346) || \
-	defined(SENSOR_SP1405)
+	defined(SENSOR_SC530AI) || defined(SENSOR_SP1405)
 
 #ifdef SENSOR_GC2053
 #include "SENSOR_H/gc2053/gc2053_mipi_default_ini_v821.h"
 #include "SENSOR_H/gc2053/gc2053_mipi_isp600_20220415_144837_IR.h"
+#endif
+
+#ifdef SENSOR_SC530AI
+#include "SENSOR_H/sc530ai/sc530ai_mipi_2880_1620_15_rgb_isp630.h"
+#include "SENSOR_H/sc530ai/sc530ai_mipi_1920_1080_15_rgb_isp630.h"
 #endif
 
 #ifdef SENSOR_SC1346
@@ -998,7 +1003,7 @@ struct isp_cfg_array cfg_arr[] = {
 	defined(SENSOR_F37P) || defined(SENSOR_SC2336) || defined(SENSOR_SC3336)|| \
 	defined(SENSOR_SC200AI) || defined(SENSOR_BF2257CS) || defined(SENSOR_IMX258) || \
 	defined(SENSOR_GC4663) || defined(SENSOR_F58) || defined(SENSOR_OS02G10) || defined(SENSOR_SC1346) || \
-	defined(SENSOR_SP1405)
+	defined(SENSOR_SC530AI) || defined(SENSOR_SP1405)
 
 #ifdef SENSOR_SC1346
 	{"sc1346_mipi",  "sc1346_mipi_isp603_20250217_102037_lens3_V32_rgb_30fps", 1280, 720, 30, 0, 0, &sc1346_mipi_rgb_isp_cfg},
@@ -1020,6 +1025,11 @@ struct isp_cfg_array cfg_arr[] = {
 #ifdef SENSOR_GC2053
 	{"gc2053_mipi",  "gc2053_mipi_default_ini_v821", 1920, 1088, 20, 0, 0, &gc2053_mipi_v821_isp_cfg},
 	{"gc2053_mipi",  "gc2053_mipi_isp600_20220415_144837_IR", 1920, 1088, 20, 0, 1, &gc2053_mipi_ir_isp_cfg},
+#endif
+
+#ifdef SENSOR_SC530AI
+	{"sc530ai_mipi",  "sc530ai_mipi_2880_1620_15_rgb_isp630", 2880, 1620, 15, 0, 0, &sc530ai_mipi_2880_1620_15_rgb_isp_cfg},
+	{"sc530ai_mipi",  "sc530ai_mipi_1920_1080_15_rgb_isp630", 1920, 1080, 15, 0, 0, &sc530ai_mipi_1920_1080_15_rgb_isp_cfg},
 #endif
 
 #ifdef SENSOR_GC2083

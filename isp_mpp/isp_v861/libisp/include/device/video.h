@@ -85,10 +85,15 @@ struct video_fmt {
 	enum dma_buffer_num dma_buf_num;
 	enum mipi_pix_num pixel_num;
 	unsigned char tdm_speed_down_en;
+	unsigned char tdm_tx_valid_num;
+	unsigned char tdm_tx_invalid_num;
+	unsigned char tdm_tx_valid_num_offset;
 	unsigned char large_dma_merge_en;
 	unsigned char video_selection_en;
 	struct video_selection_rect rect;
 	unsigned int tdm_rxbuf_cnt;
+	unsigned int tdmtime_embed_en;
+	unsigned int ispfeinfo_embed_en;
 	FILE *ptn_file;
 	unsigned char ptn_en;
 	unsigned int ptn_count_total;
@@ -211,8 +216,11 @@ int video_set_isp_d3d_lbc_ratio(struct isp_video_device *video, unsigned int d3d
 int video_set_isp_bk_buffer_align(struct isp_video_device *video, struct bk_buffer_align *bk_align);
 int video_set_isp_bk_width_stride(struct isp_video_device *video, unsigned char enable);
 int video_set_tdm_drop_frame_num(struct isp_video_device *video, unsigned int drop_num);
-int video_tdm_raw_npu_mode_disable(struct isp_video_device *video, unsigned char not_npu_mode);
-int video_set_input_bit_width_start(struct isp_video_device *video, enum set_bit_width bitwidth);
-int video_set_input_bit_width_stop(struct isp_video_device *video, enum set_bit_width bitwidth);
 int video_set_dma_overlay(struct isp_video_device *video, struct dma_overlay_para *dma_overlay_ctx);
+
+int video_set_aiisp_cfg(struct isp_video_device *video, struct tdm_aiisp_cfg *paiisp_cfg);
+int video_get_aiisp_info(struct isp_video_device *video, struct tdm_aiisp_inform *paiisp_inform);
+int video_set_aiisp_switch(struct isp_video_device *video, enum aiisp_switch_dir *paiisp_dir);
+int video_set_vbv_share_yuv(struct isp_video_device *video, unsigned int enable);
+
 #endif /* __VIDEO_H_ */

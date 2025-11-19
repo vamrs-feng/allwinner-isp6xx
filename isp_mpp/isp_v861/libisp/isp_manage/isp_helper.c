@@ -130,7 +130,7 @@ int isp_ctx_save_init(struct isp_lib_context *ctx)
 		return -1;
 	}
 
-	if(ctx->stitch_mode == STITCH_2IN1_LINNER) {
+	if(ctx->stitch_mode == STITCH_2IN1_LINEAR) {
 		sprintf(fdstr, "%s/isp%d_%d_%d_%u_%u_%s_ctx_saved.bin", ISP_PATH, 1, ctx->sensor_info.sensor_width,
 			ctx->sensor_info.sensor_height, ctx->sensor_info.fps_fixed, ctx->sensor_info.wdr_mode, ctx->sensor_info.name);
 	} else {
@@ -184,7 +184,7 @@ int isp_ctx_save_exit(struct isp_lib_context *ctx)
 		return -1;
 	}
 
-	if(ctx->stitch_mode == STITCH_2IN1_LINNER) {
+	if(ctx->stitch_mode == STITCH_2IN1_LINEAR) {
 		sprintf(fdstr, "%s/isp%d_%d_%d_%u_%u_%s_ctx_saved.bin", ISP_PATH, 1, ctx->sensor_info.sensor_width,
 			ctx->sensor_info.sensor_height, ctx->sensor_info.fps_fixed, ctx->sensor_info.wdr_mode,
 			ctx->sensor_info.name);

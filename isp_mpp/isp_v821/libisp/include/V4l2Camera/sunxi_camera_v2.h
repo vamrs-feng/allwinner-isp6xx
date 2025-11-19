@@ -340,6 +340,7 @@ enum mipi_pix_num {
 
 struct tdm_speeddn_cfg {
 	enum mipi_pix_num pix_num;
+	unsigned char tdm_tx_valid_num_offset;
 	unsigned char tdm_speed_down_en;
 	unsigned char tdm_tx_valid_num;
 	unsigned char tdm_tx_invalid_num;
@@ -800,5 +801,11 @@ enum set_bit_width {
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 103, struct v4l2_rect)
 #define VIDIOC_VIN_SET_SCALER_RESOLUTION \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 104, struct dma_merge_scaler_cfg)
-#endif /*_SUNXI_CAMERA_H_*/
 
+#define VIDIOC_VIN_SET_BUFFER_MODE \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 109, unsigned char)
+
+#define VIDIOC_VIN_SET_VBV_SHARE_YUV \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 128, unsigned int)
+
+#endif /* _SUNXI_CAMERA_H_ */

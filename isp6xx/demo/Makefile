@@ -8,14 +8,14 @@ LOCAL_CFLAGS := \
 	-I./
 
 
-OBJS = $(patsubst %.c, %.c.o, $(COM_SOURCES))
+OBJS = $(patsubst %.c, %.o, $(COM_SOURCES))
 
 LOCAL_LDFLAGS = -lisp -lisp_ini -lAWIspApi
 
 $(TARGET):$(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(LOCAL_LDFLAGS) -o $@ $^
 
-$(OBJS):%.c.o:%.c
+$(OBJS):%.o:%.c
 	$(CC) $(LOCAL_CFLAGS) $(CFLAGS) $(LDFLAGS) -c $< -o $@
 
 install: $(TARGET)

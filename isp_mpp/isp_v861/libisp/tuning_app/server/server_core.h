@@ -37,6 +37,16 @@
 #define BUILD_VERSION        "4.3.1"
 #define BUILD_VERSION_NUM    "431"
 
+#define EMBED_DATA_MODE 1
+
+#if EMBED_DATA_MODE
+#define EMBED_DATA_SIZE_2IN1 (((8+8+8+8+192+192) << 2) * 2)
+#define EMBED_DATA_SIZE ((8+8+8+8+192+192) << 2)
+#else
+#define EMBED_DATA_SIZE_2IN1 0
+#define EMBED_DATA_SIZE 0
+#endif
+
 struct ToolsIniTuning_cfg {
 	int enable;
 	char base_path[50];

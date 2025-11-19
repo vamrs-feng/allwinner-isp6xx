@@ -44,7 +44,6 @@ enum exposure_mode {
 	EXP_MANUAL       = 1,
 	SHUTTER_PRIORITY,
 	APERTURE_PRIORITY,
-	EXP_FIX_EV_IDX,
 };
 
 enum ae_mode {

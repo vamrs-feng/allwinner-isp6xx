@@ -82,6 +82,7 @@ int isp_return_tdmbuffer(int dev_id, struct vin_isp_tdm_event_status *status);
 HW_S32 isp_get_info_length(HW_S32* i3a_length, HW_S32* debug_length);
 HW_S32 isp_get_version(char* version);
 HW_S32 isp_get_awb_gain_ir(int dev_id, HW_S32 *rgain_ir, HW_S32 *bgain_ir);
+HW_S32 isp_get_awb_ir_win_cnt(int dev_id, HW_S32 *irlight_win_cnt, HW_S32 *normal_win_cnt);
 HW_S32 isp_get_ae_info(int dev_id, isp_3a_info_ae *ae_info);
 HW_S32 isp_get_awb_info(int dev_id, isp_3a_info_awb *awb_info);
 HW_S32 isp_set_ae_flicker_comp(int dev_id, HW_S16 enable);

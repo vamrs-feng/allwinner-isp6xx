@@ -20,13 +20,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "../isp_version.h"
-#if (ISP_VERSION == 600)
-#include "600/include/vencoder.h"
-#elif (ISP_VERSION == 603)
-#include "vencoder.h"
-#include "vencoder_base.h"
-#else
-#include "601/include/vencoder.h"
+#if (ISP_VERSION == 610)
+#include "610/include/vencoder.h"
+#include "610/include/memoryAdapter.h"
 #endif
 
 #define VENCODE_ROI_NUM 4
@@ -99,7 +95,6 @@ typedef struct Fixqp {
 	int mPQp;
 } Fixqp;
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 typedef struct
 {
    int (*EventHandler)(
@@ -110,7 +105,6 @@ typedef struct
         unsigned int nData2,
         void* pEventData);
 } EncoderCbType;
-#endif
 
 typedef struct {
 	unsigned int src_width;
@@ -158,13 +152,11 @@ typedef struct {
     unsigned int bColorSpaceFullFlag;
 	unsigned int debug_gdc_en;
 
-      jpeg_func_t jpeg_func;
+	jpeg_func_t jpeg_func;
 	h264_func_t h264_func;
 	h265_func_t h265_func;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
     EncoderCbType* pCallbacks;
     void* pAppData;
-#endif
 }encode_param_t;
 
 int EncoderOpen(VENC_CODEC_TYPE type);
@@ -179,27 +171,31 @@ int EncoderFreeOutputBuffer(VencOutputBuffer *outputBuffer);
 
 int EncoderClose(encode_param_t *encode_param);
 
-int EncoderGetWbYuv(encode_param_t *encode_param, unsigned char* dst_buf, unsigned int buf_size);
+int EncoderGetWbYuv(encode_param_t *encode_param, unsigned char **dst_buf, unsigned int *buf_size);
 
 int EncoderSetParamEnableSharp(encode_param_t *encode_param, unsigned int bEnable);
 
 int EncoderSetParamColorSpace(encode_param_t *encode_param, VENC_COLOR_SPACE eColorSpace, unsigned int bFullFlag);
 
+int EncoderSetParamIspbeEnable(encode_param_t *encode_param, unsigned int ispbe);
+
+int EncoderSetParamIspbeEmbedEnable(encode_param_t *encode_param, unsigned int embed);
+
+int EncoderSetParamIspbeTopConfig(encode_param_t *encode_param, sEncppIspbeTopConfig *pIspbeTopConfig);
+
+int EncoderSetParamIspbeSharpConfig(encode_param_t *encode_param, sEncppIspbeSharpConfig *pIspbeSharpConfig);
+
+int EncoderSetParamIspbeLdciConfig(encode_param_t *encode_param, sEncppIspbeLdciConfig *pIspbeLdciConfig);
+
 int EncoderSetParamSuperFrame(encode_param_t *encode_param, VencSuperFrameConfig *pSuperFrameConfig);
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 int EncoderSetCallbacks(encode_param_t *encode_param, EncoderCbType* pCallbacks, void* pAppData);
 
-int EncoderSetParamSharpConfig(encode_param_t *encode_param, sEncppSharpParam* pSharpParam);
-
-#if (ISP_VERSION == 600)
-int EncoderSetParam3DFliter(encode_param_t *encode_param, s3DfilterParam *p3dFilterParam);
-#endif
+// int EncoderSetParam3DFliter(encode_param_t *encode_param, s3DfilterParam *p3dFilterParam);
 
 int EncoderSetParam2DFliter(encode_param_t *encode_param, s2DfilterParam *p2dFilterParam);
 
 int EncoderSetEnvLv(encode_param_t *encode_param, int *value);
-#endif
 
 #ifdef __cplusplus
 }

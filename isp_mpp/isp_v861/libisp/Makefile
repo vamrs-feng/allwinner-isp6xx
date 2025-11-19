@@ -10,48 +10,47 @@ CUR_PATH := .
 
 ifeq ($(LIBISP_CFG_COMPILE_DYNAMIC_LIB), Y)
 LOCAL_SHARED_LIBS += \
-    liblog \
-    libawion 
+	liblog \
+	libawion
 
-LOCAL_SHARED_LIBS += \
-    libisp_dev \
-    libiniparser \
-    libisp_ae \
+LOCAL_SHARED_LIBS +=
+
+LOCAL_STATIC_LIBS := \
+	libisp_dev \
+	libiniparser \
+	libisp_ae \
 	libisp_ini \
-    libisp_af \
-    libisp_afs \
-    libisp_awb \
-    libisp_base \
-    libisp_gtm \
-    libisp_iso \
-    libisp_math \
-    libisp_md \
-    libisp_pltm \
-    libisp_rolloff
-
-LOCAL_STATIC_LIBS :=
-
+	libisp_af \
+	libisp_afs \
+	libisp_awb \
+	libisp_base \
+	libisp_gtm \
+	libisp_iso \
+	libisp_math \
+	libisp_md \
+	libisp_pltm \
+	libisp_rolloff
 else
 LOCAL_SHARED_LIBS += \
-    librt \
-    libpthread \
-    liblog
+	librt \
+	libpthread \
+	liblog
 
 LOCAL_STATIC_LIBS += \
-    libisp_dev \
-    libiniparser \
-    libisp_ini \
-    libisp_ae \
-    libisp_af \
-    libisp_afs \
-    libisp_awb \
-    libisp_base \
-    libisp_gtm \
-    libisp_iso \
-    libisp_math \
-    libisp_md \
-    libisp_pltm \
-    libisp_rolloff
+	libisp_dev \
+	libiniparser \
+	libisp_ini \
+	libisp_ae \
+	libisp_af \
+	libisp_afs \
+	libisp_awb \
+	libisp_base \
+	libisp_gtm \
+	libisp_iso \
+	libisp_math \
+	libisp_md \
+	libisp_pltm \
+	libisp_rolloff
 endif
 
 LIB_SEARCH_PATHS := \
@@ -60,28 +59,28 @@ LIB_SEARCH_PATHS := \
 commonSources:= \
 	isp.c \
 	isp_events/events.c \
-    isp_tuning/isp_tuning.c \
-    isp_manage/isp_manage.c \
+	isp_tuning/isp_tuning.c \
+	isp_manage/isp_manage.c \
 	isp_manage/isp_helper.c \
 
 local_CFLAGS := \
 	-I./include/V4l2Camera \
-    -I./include/device \
-    -I./include \
-    -I./isp_dev \
-    -I./isp_tuning \
-    -I./
+	-I./include/device \
+	-I./include \
+	-I./isp_dev \
+	-I./isp_tuning \
+	-I./
 
 OBJS = $(patsubst %.c, %.o, $(commonSources))
 
 LOCAL_LDFLAGS := $(LDFLAGS) $(LIBISP_CFG_CFLAGS)
 
 LOCAL_DYNAMIC_LDFLAGS := $(LOCAL_LDFLAGS) -shared \
-    $(patsubst %,-L%,$(LIB_SEARCH_PATHS)) \
-    -Wl,-Bstatic \
-    -Wl,--start-group $(foreach n, $(LOCAL_STATIC_LIBS), -l$(patsubst lib%,%,$(patsubst %.a,%,$(notdir $(n))))) -Wl,--end-group \
-    -Wl,-Bdynamic \
-    $(foreach y, $(LOCAL_SHARED_LIBS), -l$(patsubst lib%,%,$(patsubst %.so,%,$(notdir $(y)))))
+	$(patsubst %,-L%,$(LIB_SEARCH_PATHS)) \
+	-Wl,-Bstatic \
+	-Wl,--whole-archive $(foreach n, $(LOCAL_STATIC_LIBS), -l$(patsubst lib%,%,$(patsubst %.a,%,$(notdir $(n))))) -Wl,--no-whole-archive \
+	-Wl,-Bdynamic \
+	$(foreach y, $(LOCAL_SHARED_LIBS), -l$(patsubst lib%,%,$(patsubst %.so,%,$(notdir $(y)))))
 
 #add dynamic lib name suffix and static lib name suffix.
 ifeq ($(LIBISP_CFG_COMPILE_DYNAMIC_LIB), Y)

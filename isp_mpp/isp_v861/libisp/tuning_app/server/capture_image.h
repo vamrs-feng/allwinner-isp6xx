@@ -72,9 +72,12 @@ typedef struct _capture_format_s {
 	int                      wdr;     // for input
 	int                      format;  // for input
 	int                      planes_count; // planes count
-	int			 framecount;//frame count
+	int                      framecount;//frame count
 	int                      width_stride[3]; // width stride for each plane
-	int						index; //rear:0 front:1
+	int                      index; //rear:0 front:1
+	int                      isp;
+	int                      stitch_mode;
+	int                      ptn_en;
 } capture_format;
 
 typedef struct _sensor_input_s {

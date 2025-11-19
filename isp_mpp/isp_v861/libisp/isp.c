@@ -98,11 +98,16 @@ static int __ae_done(struct isp_lib_context *lib,
 			ae_result_t *result __attribute__((__unused__)))
 {
 #if (HW_ISP_DEVICE_NUM > 1)
-	int count = (media_params.isp_sync_mode >> 16) & 0xff;
-	if (count > 1) {
-		if (lib->isp_id != 1 && (media_params.isp_sync_mode & (0x1 << lib->isp_id))) {
-			*result = isp_ctx[1].ae_entity_ctx.ae_result;
-			ISP_LIB_LOG(ISP_LOG_AE, "merge mode : isp1 ae result -> isp%d ae result\n", lib->isp_id);
+	int i, base_id = 0;
+	if (media_params.isp_sync_count[lib->isp_id] > 1) {
+		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {//Find the last id
+			if (media_params.isp_sync_mode[lib->isp_id] & (0x1 << i)) {
+				base_id = i;
+			}
+		}
+		if (lib->isp_id != base_id) {
+			*result = isp_ctx[base_id].ae_entity_ctx.ae_result;
+			ISP_LIB_LOG(ISP_LOG_AE, "merge mode : isp%d use isp%d ae_result\n", lib->isp_id, base_id);
 			return 1;
 		}
 	}
@@ -114,11 +119,16 @@ static int __af_done(struct isp_lib_context *lib,
 			af_result_t *result __attribute__((__unused__)))
 {
 #if (HW_ISP_DEVICE_NUM > 1)
-	int count = (media_params.isp_sync_mode >> 16) & 0xff;
-	if (count > 1) {
-		if (lib->isp_id != 1 && (media_params.isp_sync_mode & (0x1 << lib->isp_id))) {
-			*result = isp_ctx[1].af_entity_ctx.af_result;
-			ISP_LIB_LOG(ISP_LOG_AF, "large image mode : isp1 af result -> isp%d af result\n", lib->isp_id);
+	int i, base_id = 0;
+	if (media_params.isp_sync_count[lib->isp_id] > 1) {
+		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {//Find the last id
+			if (media_params.isp_sync_mode[lib->isp_id] & (0x1 << i)) {
+				base_id = i;
+			}
+		}
+		if (lib->isp_id != base_id) {
+			*result = isp_ctx[base_id].af_entity_ctx.af_result;
+			ISP_LIB_LOG(ISP_LOG_AE, "merge mode : isp%d use isp%d af_result\n", lib->isp_id, base_id);
 			return 1;
 		}
 	}
@@ -130,23 +140,18 @@ static int __awb_done(struct isp_lib_context *lib,
 			awb_result_t *result __attribute__((__unused__)))
 {
 #if (HW_ISP_DEVICE_NUM > 1)
-	int i, idx = 0, count = (media_params.isp_sync_mode >> 16) & 0xff;
-	if (count == 1) {
-		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
-			if (media_params.isp_sync_mode & (0x1 << i)) {
-				idx = i;
-				break;
+	int i, base_id = 0;
+	if (media_params.isp_sync_count[lib->isp_id] == 1) {
+		ISP_ERR("isp%d awb slave mode is not supported yet\n", lib->isp_id);
+	} else if (media_params.isp_sync_count[lib->isp_id] > 1) {
+		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {//Find the last id
+			if (media_params.isp_sync_mode[lib->isp_id] & (0x1 << i)) {
+				base_id = i;
 			}
 		}
-		if (lib->isp_id != idx) {
-			*result = isp_ctx[idx].awb_entity_ctx.awb_result;
-			ISP_LIB_LOG(ISP_LOG_AWB, "slave mode : isp%d awb result -> isp%d awb result\n", idx, lib->isp_id);
-			return 1;
-		}
-	} else if (count > 1) {
-		if (lib->isp_id != 1 && (media_params.isp_sync_mode & (0x1 << lib->isp_id))) {
-			*result = isp_ctx[1].awb_entity_ctx.awb_result;
-			ISP_LIB_LOG(ISP_LOG_AWB, "merge mode : isp1 awb result -> isp%d awb result\n", lib->isp_id);
+		if (lib->isp_id != base_id) {
+			*result = isp_ctx[base_id].awb_entity_ctx.awb_result;
+			ISP_LIB_LOG(ISP_LOG_AE, "merge mode : isp%d use isp%d awb_result\n", lib->isp_id, base_id);
 			return 1;
 		}
 	}
@@ -158,11 +163,16 @@ static int __afs_done(struct isp_lib_context *lib,
 			afs_result_t *result __attribute__((__unused__)))
 {
 #if (HW_ISP_DEVICE_NUM > 1)
-	int count = (media_params.isp_sync_mode >> 16) & 0xff;
-	if (count > 1) {
-		if (lib->isp_id != 1 && (media_params.isp_sync_mode & (0x1 << lib->isp_id))) {
-			*result = isp_ctx[1].afs_entity_ctx.afs_result;
-			ISP_LIB_LOG(ISP_LOG_AFS, "merge mode : isp1 afs result -> isp%d afs result\n", lib->isp_id);
+	int i, base_id = 0;
+	if (media_params.isp_sync_count[lib->isp_id] > 1) {
+		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {//Find the last id
+			if (media_params.isp_sync_mode[lib->isp_id] & (0x1 << i)) {
+				base_id = i;
+			}
+		}
+		if (lib->isp_id != base_id) {
+			*result = isp_ctx[base_id].afs_entity_ctx.afs_result;
+			ISP_LIB_LOG(ISP_LOG_AE, "merge mode : isp%d use isp%d afs_result\n", lib->isp_id, base_id);
 			return 1;
 		}
 	}
@@ -182,11 +192,16 @@ static int __pltm_done(struct isp_lib_context *lib,
 			pltm_result_t *result __attribute__((__unused__)))
 {
 #if (HW_ISP_DEVICE_NUM > 1)
-	int count = (media_params.isp_sync_mode >> 16) & 0xff;
-	if (count > 1) {
-		if (lib->isp_id != 1 && (media_params.isp_sync_mode & (0x1 << lib->isp_id))) {
-			*result = isp_ctx[1].pltm_entity_ctx.pltm_result;
-			ISP_LIB_LOG(ISP_LOG_PLTM, "merge mode : isp1 pltm result -> isp%d pltm result\n", lib->isp_id);
+	int i, base_id = 0;
+	if (media_params.isp_sync_count[lib->isp_id] > 1) {
+		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {//Find the last id
+			if (media_params.isp_sync_mode[lib->isp_id] & (0x1 << i)) {
+				base_id = i;
+			}
+		}
+		if (lib->isp_id != base_id) {
+			*result = isp_ctx[base_id].pltm_entity_ctx.pltm_result;
+			ISP_LIB_LOG(ISP_LOG_AE, "merge mode : isp%d use isp%d pltm_result\n", lib->isp_id, base_id);
 			return 1;
 		}
 	}
@@ -199,12 +214,16 @@ static int __gtm_done(struct isp_lib_context *lib,
 			gtm_result_t *result __attribute__((__unused__)))
 {
 #if (HW_ISP_DEVICE_NUM > 1)
-	int count = (media_params.isp_sync_mode >> 16) & 0xff;
-	if (count > 1) {
-		if (lib->isp_id != 1 && (media_params.isp_sync_mode & (0x1 << lib->isp_id))) {
-			//memcpy(&lib->module_cfg.drc_cfg.drc_table[0], &isp_ctx[0].module_cfg.drc_cfg.drc_table[0], ISP_DRC_TBL_SIZE*sizeof(unsigned short));
-			memcpy(&lib->module_cfg.drc_cfg.drc_table[0], &isp_ctx[1].gtm_entity_ctx.gtm_result.drc_table_output[0], ISP_DRC_TBL_SIZE*sizeof(unsigned short));
-			ISP_LIB_LOG(ISP_LOG_GTM, "merge mode : isp1 drc_table -> isp%d drc_table\n", lib->isp_id);
+	int i, base_id = 0;
+	if (media_params.isp_sync_count[lib->isp_id] > 1) {
+		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {//Find the last id
+			if (media_params.isp_sync_mode[lib->isp_id] & (0x1 << i)) {
+				base_id = i;
+			}
+		}
+		if (lib->isp_id != base_id) {
+			memcpy(&lib->module_cfg.drc_cfg.drc_table[0], &isp_ctx[base_id].gtm_entity_ctx.gtm_result.drc_table_output[0], ISP_DRC_TBL_SIZE*sizeof(unsigned short));
+			ISP_LIB_LOG(ISP_LOG_AE, "merge mode : isp%d use isp%d drc_table\n", lib->isp_id, base_id);
 			return 1;
 		}
 	}
@@ -607,6 +626,14 @@ static HW_S32 __isp_frame_process(struct hw_isp_device *isp, struct isp_lib_cont
 		ctx->isp_ir_flag_last = ctx->isp_ir_flag;
 	}
 
+	if (ctx->initial_cfg.effect_hold_cnt) {
+		ctx->initial_cfg.effect_hold_cnt--;
+		if (ctx->initial_cfg.effect_hold_cnt == 0) {
+			ctx->isp_3a_change_flags |= ISP_SET_EFFECT;
+			ctx->isp_3a_change_flags |= ISP_SET_HUE;
+		}
+	}
+
 	// MIPI_SWITCH PROCESS
 	if (ctx->switch_info.mipi_switch_enable) {
 		isp_sensor_mipi_switch_comp_process(ctx->isp_id, ctx, &ctx->switch_info.mipi_switch_info);
@@ -639,24 +666,20 @@ static void __isp_stats_process(struct hw_isp_device *isp, const void *buffer)
 
 	ctx->isp_stat_buf = buffer;
 #if (HW_ISP_DEVICE_NUM > 1)
-	if (media_params.isp_sync_mode) {
-		if ((((media_params.isp_sync_mode >> 16) & 0xff) > 1) && (media_params.isp_sync_mode & (0x1 << isp->id))) {
-			for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
-				if (media_params.isp_sync_mode & (0x1 << i)) {
-					if (buffer0 == NULL)
-						buffer0 = isp_ctx[i].isp_stat_buf;
-					else
-						buffer1 = isp_ctx[i].isp_stat_buf;
-				}
+	if (media_params.isp_sync_count[ctx->isp_id] > 1) {
+		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
+			if (media_params.isp_sync_mode[ctx->isp_id] & (0x1 << i)) {
+				if (buffer0 == NULL)
+					buffer0 = isp_ctx[i].isp_stat_buf;
+				else
+					buffer1 = isp_ctx[i].isp_stat_buf;
 			}
-			if (!buffer0 || !buffer1) {
-				ISP_WARN("can not use sync mode.(buffer0 = %p, buffer1 = %p)\n", buffer0, buffer1);
-				isp_ctx_stats_prepare(ctx, ctx->isp_stat_buf);
-			} else {
-				isp_ctx_stats_prepare_sync(ctx, buffer0, buffer1);
-			}
-		} else {
+		}
+		if (!buffer0 || !buffer1) {
+			ISP_WARN("isp%d can not use sync mode.(buffer0 = %p, buffer1 = %p)\n", ctx->isp_id, buffer0, buffer1);
 			isp_ctx_stats_prepare(ctx, ctx->isp_stat_buf);
+		} else {
+			isp_ctx_stats_prepare_sync(ctx, buffer0, buffer1);
 		}
 	} else {
 		isp_ctx_stats_prepare(ctx, ctx->isp_stat_buf);
@@ -685,6 +708,9 @@ static void __isp_stats_process(struct hw_isp_device *isp, const void *buffer)
 			if (isp->id == 0 && media_params.isp_dev[0] != NULL && media_params.isp_dev[1] != NULL &&
 			    !strcmp(media_params.isp_dev[0]->sensor.info.name, media_params.isp_dev[1]->sensor.info.name)) {
 				ISP_DEV_LOG(ISP_LOG_ISP, "isp0 and isp1 are opened and have same head, so we only use isp1 to do af!\n");
+			} else if (isp->id == 2 && media_params.isp_dev[2] != NULL && media_params.isp_dev[3] != NULL &&
+			    !strcmp(media_params.isp_dev[2]->sensor.info.name, media_params.isp_dev[3]->sensor.info.name)) {
+			    ISP_DEV_LOG(ISP_LOG_ISP, "isp2 and isp3 are opened and have same head, so we only use isp3 to do af!\n");
 			} else {
 				isp_act_set_pos(isp, af_result->real_code_output);
 			}
@@ -702,6 +728,9 @@ static void __isp_stats_process(struct hw_isp_device *isp, const void *buffer)
 	if (isp->id == 0 && media_params.isp_dev[0] != NULL && media_params.isp_dev[1] != NULL &&
 	    !strcmp(media_params.isp_dev[0]->sensor.info.name, media_params.isp_dev[1]->sensor.info.name)) {
 		ISP_DEV_LOG(ISP_LOG_ISP, "isp0 and isp1 are opened and have same head, so we only use isp1 to set flash!\n");
+	} else if (isp->id == 2 && media_params.isp_dev[2] != NULL && media_params.isp_dev[3] != NULL &&
+	    !strcmp(media_params.isp_dev[2]->sensor.info.name, media_params.isp_dev[3]->sensor.info.name)) {
+		ISP_DEV_LOG(ISP_LOG_ISP, "isp2 and isp3 are opened and have same head, so we only use isp3 to set flash!\n");
 	} else {
 		isp_flash_update_status(isp);
 	}
@@ -731,6 +760,9 @@ static void __isp_stats_process(struct hw_isp_device *isp, const void *buffer)
 	if (isp->id == 1 && media_params.isp_dev[0] != NULL && media_params.isp_dev[1] != NULL &&
 	    !strcmp(media_params.isp_dev[0]->sensor.info.name, media_params.isp_dev[1]->sensor.info.name)) {
 		ISP_DEV_LOG(ISP_LOG_ISP, "isp0 and isp1 are opened and have same head, so we only use isp0 to do ae!\n");
+	} else if (isp->id == 3 && media_params.isp_dev[2] != NULL && media_params.isp_dev[3] != NULL &&
+	    !strcmp(media_params.isp_dev[2]->sensor.info.name, media_params.isp_dev[3]->sensor.info.name)) {
+		ISP_DEV_LOG(ISP_LOG_ISP, "isp2 and isp3 are opened and have same head, so we only use isp2 to do ae!\n");
 	} else {
 		isp_sensor_set_exp_gain(isp, &exp_gain);
 	}
@@ -891,13 +923,13 @@ static void isp_ctrl_process_run(struct isp_lib_context *isp_gen, HW_U32 ctrl_id
 void __isp_ctrl_process(struct hw_isp_device *isp, struct v4l2_event *event)
 {
 	struct isp_lib_context *isp_gen = isp_dev_get_ctx(isp);
-	int i, mode, count = (media_params.isp_sync_mode >> 16) & 0xff;
+	int i, mode;
 
 	if (isp_gen == NULL)
 		return;
 
-	if (count > 1) {
-		mode = media_params.isp_sync_mode & 0xffff;
+	if (media_params.isp_sync_count[isp_gen->isp_id] > 1) {
+		mode = media_params.isp_sync_mode[isp_gen->isp_id];
 		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
 			if (mode & (0x1 << i)) {
 				if (media_params.isp_use_cnt[i] == 0) {
@@ -980,15 +1012,20 @@ int isp_set_sync(int mode)
 {
 #if (HW_ISP_DEVICE_NUM > 1)
 	int i, count = 0;
-	for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
+	for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {//Calculate sync channel count
 		if (mode & (0x1 << i)) {
 			count++;
 		}
 	}
-	media_params.isp_sync_mode = (count << 16) | (mode & 0xffff);
-	ISP_PRINT("ISP Set Sync Mode = 0x%x, isp_sync_mode = 0x%x\n", mode, media_params.isp_sync_mode);
+	for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {//set sync_mode and sync_count
+		if (mode & (0x1 << i)) {
+			media_params.isp_sync_mode[i] = mode;
+			media_params.isp_sync_count[i] = count;
+			ISP_PRINT("ISP%d Set Sync Mode = 0x%x, Sync Count = %d\n", i, mode, count);
+		}
+	}
 #else
-	media_params.isp_sync_mode = 0;
+	media_params.isp_sync_mode[0] = 0;
 #endif
 	return 0;
 }
@@ -1008,12 +1045,12 @@ int isp_set_stitch_mode(int isp_id, enum stitch_mode_t stitch_mode)
 
 	isp_ctx[isp_id].stitch_mode = stitch_mode;
 	switch (stitch_mode) {
-	case STITCH_2IN1_LINNER:
+	case STITCH_2IN1_LINEAR:
 		if (isp_id % 2 == 0)
 			isp_ctx[isp_id + 1].stitch_mode = stitch_mode;
 		else
 			isp_ctx[isp_id - 1].stitch_mode = stitch_mode;
-		ISP_PRINT("STITCH_2IN1_LINNER\n");
+		ISP_PRINT("STITCH_2IN1_LINEAR\n");
 		break;
 	default:
 		ISP_ERR("not recognized stitch mode\n");
@@ -1082,6 +1119,7 @@ int isp_ir_reset(int dev_id, int mode_flag)
 			if (isp_ctx[dev_id].isp_ir_flag != ISP_AIISP_MODE) //original flag
 				rst_en = 1;
 			isp_ctx[dev_id].isp_ir_flag = ISP_AIISP_MODE;
+			isp_ctx[dev_id].initial_cfg.effect_hold_cnt = 3;
 			ISP_PRINT("ISP select ai-isp config\n");
 		} else {
 			if (isp_ctx[dev_id].isp_ir_flag == ISP_AIISP_MODE) //original flag
@@ -1093,9 +1131,10 @@ int isp_ir_reset(int dev_id, int mode_flag)
 		if (isp_ctx[dev_id].isp_ir_flag == ISP_AIISP_MODE) //original flag
 			rst_en = 1;
 		isp_ctx[dev_id].isp_ir_flag = ISP_COLOR_MODE;
+		isp_ctx[dev_id].initial_cfg.effect_hold_cnt = 3;
 	}
 
-	isp_params_parse(isp, &isp_ctx[dev_id].isp_ini_cfg, isp_ctx[dev_id].isp_ir_flag, media_params.isp_sync_mode);
+	isp_params_parse(isp, &isp_ctx[dev_id].isp_ini_cfg, isp_ctx[dev_id].isp_ir_flag, 0);
 	ret = isp_tuning_reset(isp, &isp_ctx[dev_id].isp_ini_cfg);
 	if (ret) {
 		ISP_ERR("error: unable to reset isp tuning\n");
@@ -1124,7 +1163,7 @@ int isp_reset(int dev_id)
 	}
 
 	isp_ctx[dev_id].isp_ir_flag = ISP_COLOR_MODE;
-	isp_params_parse(isp, &isp_ctx[dev_id].isp_ini_cfg, isp_ctx[dev_id].isp_ir_flag, media_params.isp_sync_mode);
+	isp_params_parse(isp, &isp_ctx[dev_id].isp_ini_cfg, isp_ctx[dev_id].isp_ir_flag, 0);
 	ret = isp_tuning_reset(isp, &isp_ctx[dev_id].isp_ini_cfg);
 	if (ret) {
 		ISP_ERR("error: unable to reset isp tuning\n");
@@ -1185,7 +1224,7 @@ int isp_init(int dev_id)
 	isp_ctx[dev_id].isp_algo_freq_div = DIV_RATIO_MIN;
 	isp_ctx[dev_id].isp_algo_cnt = DIV_RATIO_MIN;
 	isp_ctx[dev_id].isp_ir_flag = ISP_COLOR_MODE; // default close ir config , colorful
-	ret = isp_params_parse(isp, &isp_ctx[dev_id].isp_ini_cfg, isp_ctx[dev_id].isp_ir_flag, media_params.isp_sync_mode);
+	ret = isp_params_parse(isp, &isp_ctx[dev_id].isp_ini_cfg, isp_ctx[dev_id].isp_ir_flag, 0);
 	if (ret < 0) {
 		if (dev_id >= 1)
 			isp_ctx[dev_id].isp_ini_cfg = isp_ctx[0].isp_ini_cfg;
@@ -1307,7 +1346,8 @@ int isp_exit(int dev_id)
 
 	/*clear stitch info*/
 	isp_ctx[dev_id].stitch_mode = STITCH_NONE;
-	media_params.isp_sync_mode = 0;
+	media_params.isp_sync_count[dev_id] = 0;
+	media_params.isp_sync_mode[dev_id] = 0;
 	isp_ctx[dev_id].isp_stat_buf = NULL;
 
 #if (LIBISP_CFG_FASTBOOT == 0)
@@ -1649,8 +1689,7 @@ HW_S32 isp_get_lv(int dev_id)
 
 	return ctx->ae_entity_ctx.ae_result.sensor_set.ev_set_curr.ev_lv;
 }
-
-HW_S32 isp_get_encpp_cfg(int dev_id, HW_U32 ctrl_id, void *value)
+HW_S32 isp_get_encpp_ispbe_cfg(int dev_id, HW_U32 ctrl_id, void *value)
 {
 #ifdef USE_ENCPP
 #if LIBISP_CFG_FASTBOOT
@@ -1672,13 +1711,16 @@ HW_S32 isp_get_encpp_cfg(int dev_id, HW_U32 ctrl_id, void *value)
 		return -1;
 
 	switch(ctrl_id) {
-		case ISP_CTRL_ENCPP_TOP_CFG:
+		case ISP_CTRL_ENCPP_ISPBE_ENABLE:
+			*(HW_S32 *)value = isp_gen->isp_ini_cfg.isp_test_settings.encpp_top_en;
+			break;
+		case ISP_CTRL_ENCPP_ISPBE_TOP_CFG:
 			*(struct encpp_top_config *)value = isp_gen->encpp_top_cfg;
 			break;
-		case ISP_CTRL_ENCPP_SHARP_CFG:
+		case ISP_CTRL_ENCPP_ISPBE_SHARP_CFG:
 			*(struct encpp_sharp_config *)value = isp_gen->encpp_sharp_cfg;
 			break;
-		case ISP_CTRL_ENCPP_LDCI_CFG:
+		case ISP_CTRL_ENCPP_ISPBE_LDCI_CFG:
 			*(struct encpp_ldci_config *)value = isp_gen->encpp_ldci_cfg;
 			break;
 		case ISP_CTRL_ENCODER_3DNR_CFG:
@@ -1906,7 +1948,7 @@ static void isp_set_attr_cfg_run(struct isp_lib_context *isp_gen, HW_U32 ctrl_id
 HW_S32 isp_set_attr_cfg(int dev_id, HW_U32 ctrl_id, void *value)
 {
 	struct hw_isp_device *isp = NULL;
-	int i, mode, count = (media_params.isp_sync_mode >> 16) & 0xff;
+	int i, mode;
 
 	if (dev_id >= HW_ISP_DEVICE_NUM)
 		return -1;
@@ -1921,8 +1963,8 @@ HW_S32 isp_set_attr_cfg(int dev_id, HW_U32 ctrl_id, void *value)
 	if (isp_gen == NULL)
 		return -1;
 
-	if (count > 1) {
-		mode = media_params.isp_sync_mode & 0xffff;
+	if (media_params.isp_sync_count[isp_gen->isp_id] > 1) {
+		mode = media_params.isp_sync_mode[isp_gen->isp_id];
 		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
 			if (mode & (0x1 << i)) {
 				if (media_params.isp_use_cnt[i] == 0) {
@@ -1957,15 +1999,18 @@ HW_S32 isp_fastboot_get_encpp_cfg(int dev_id, struct isp_video_device *video, HW
 
 	video_fastboot_get_encpp_cfg_attr(video, &fastboot_encpp_cfg_attr);
 	switch(ctrl_id) {
-		case ISP_CTRL_ENCPP_EN:
+		/*case ISP_CTRL_ENCPP_ISPBE_ENABLE:
 			*(HW_S32 *)value = fastboot_encpp_cfg_attr.encpp_en;
 			break;
-		case ISP_CTRL_ENCPP_STATIC_CFG:
-			*(struct encpp_static_sharp_config *)value = fastboot_encpp_cfg_attr.encpp_static_sharp_cfg;
+		case ISP_CTRL_ENCPP_ISPBE_TOP_CFG:
+			*(struct encpp_top_config *)value = isp_gen->encpp_top_cfg;
 			break;
-		case ISP_CTRL_ENCPP_DYNAMIC_CFG:
-			*(struct encpp_dynamic_sharp_config *)value = fastboot_encpp_cfg_attr.encpp_dynamic_sharp_cfg;
+		case ISP_CTRL_ENCPP_ISPBE_SHARP_CFG:
+			*(struct encpp_sharp_config *)value = isp_gen->encpp_sharp_cfg;
 			break;
+		case ISP_CTRL_ENCPP_ISPBE_LDCI_CFG:
+			*(struct encpp_ldci_config *)value = isp_gen->encpp_ldci_cfg;
+			break;*/
 		case ISP_CTRL_ENCODER_3DNR_CFG:
 			*(struct encoder_3dnr_config *)value = fastboot_encpp_cfg_attr.encoder_3dnr_cfg;
 			break;
@@ -2018,7 +2063,7 @@ HW_S32 isp_fastboot_set_attr_cfg(int dev_id, struct isp_video_device *video, HW_
 		{
 			isp_cfg_info isp_cfg_info_entity;
 			isp_cfg_info_entity = *(isp_cfg_info *)value;
-			strcpy(fastboot_isp_cfg_attr.path, &isp_cfg_info_entity.isp_cfg_bin_path);
+			strcpy(fastboot_isp_cfg_attr.path, isp_cfg_info_entity.isp_cfg_bin_path);
 			break;
 		}
 		case ISP_CTRL_AE_ROI_TARGET:
@@ -2127,13 +2172,13 @@ HW_S32 isp_fastboot_get_attr_cfg(int dev_id, struct isp_video_device *video, HW_
 }
 #endif
 
-HW_S32 isp_get_encpp_cfg_ctrl(int dev_id, struct isp_video_device *video, HW_U32 ctrl_id, void *value)
+HW_S32 isp_get_encpp_ispbe_cfg_ctrl(int dev_id, struct isp_video_device *video, HW_U32 ctrl_id, void *value)
 {
 	int ret = 0;
 #if LIBISP_CFG_FASTBOOT
 	ret = isp_fastboot_get_encpp_cfg(dev_id, video, ctrl_id, value);
 #else
-	ret = isp_get_encpp_cfg(dev_id, ctrl_id, value);
+	ret = isp_get_encpp_ispbe_cfg(dev_id, ctrl_id, value);
 #endif
 	return ret;
 }
@@ -2251,15 +2296,15 @@ static void isp_set_initial_cfg_run(struct isp_lib_context *isp_gen, HW_U32 ctrl
 HW_S32 isp_set_initial_cfg(int dev_id, HW_U32 ctrl_id, void *value)
 {
 	struct isp_lib_context *isp_gen = NULL;
-	int i, mode, count = (media_params.isp_sync_mode >> 16) & 0xff;
+	int i, mode;
 
 	if (dev_id >= HW_ISP_DEVICE_NUM)
 		return -1;
 
 	isp_gen = &isp_ctx[dev_id];
 
-	if (count > 1) {
-		mode = media_params.isp_sync_mode & 0xffff;
+	if (media_params.isp_sync_count[isp_gen->isp_id] > 1) {
+		mode = media_params.isp_sync_mode[isp_gen->isp_id];
 		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
 			if (mode & (0x1 << i)) {
 				isp_gen = &isp_ctx[i];
@@ -3434,7 +3479,7 @@ int isp_set_algo_freq_div(int dev_id, HW_U16 div_ratio)
 #if (LIBISP_CFG_FASTBOOT == 0)
 	struct hw_isp_device *isp = NULL;
 	struct isp_lib_context *ctx;
-	int i, mode, count = (media_params.isp_sync_mode >> 16) & 0xff;
+	int i, mode;
 
 	isp = media_params.isp_dev[dev_id];
 	if (!isp) {
@@ -3453,8 +3498,8 @@ int isp_set_algo_freq_div(int dev_id, HW_U16 div_ratio)
 	}
 
 	ctx = &isp_ctx[dev_id];
-	if (count > 1) {
-		mode = media_params.isp_sync_mode & 0xffff;
+	if (media_params.isp_sync_count[ctx->isp_id] > 1) {
+		mode = media_params.isp_sync_mode[ctx->isp_id];
 		for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
 			if (mode & (0x1 << i)) {
 				ctx = &isp_ctx[i];
@@ -3548,6 +3593,7 @@ int isp_read_cfg_bin(int dev_id, int mode_flag, char *isp_cfg_bin_path)
 	switch (mode_flag) {
 	case 0x00:
 		isp_gen->isp_ir_flag = 0;
+		isp_gen->initial_cfg.effect_hold_cnt = 3;
 		ISP_PRINT("ISP set color mode\n");
 		break;
 	case 0x01:
@@ -3565,7 +3611,7 @@ int isp_read_cfg_bin(int dev_id, int mode_flag, char *isp_cfg_bin_path)
 		isp_gen->isp_ir_flag = 0;
 	}
 
-	isp_cfg_bin_parse(isp, isp_reset_en, isp_cfg_bin_path, media_params.isp_sync_mode);
+	isp_cfg_bin_parse(isp, isp_reset_en, isp_cfg_bin_path, 0);
 
 	if (isp_reset_en) {
 		ISP_PRINT("load reg\n");
@@ -3652,8 +3698,10 @@ HW_S32 isp_get_awb_gain_ir(int dev_id, HW_S32 *rgain_ir, HW_S32 *bgain_ir)
 	if (isp_gen == NULL)
 		return -1;
 
-	*rgain_ir = isp_gen->rgain_ir;
-	*bgain_ir = isp_gen->bgain_ir;
+	isp_get_software_ir_param(isp_gen);
+
+	*rgain_ir = isp_gen->software_ir_info.rgain_ir;
+	*bgain_ir = isp_gen->software_ir_info.bgain_ir;
 
 	return 0;
 }
@@ -3689,6 +3737,31 @@ HW_S32 isp_get_awb_stats_avg(int dev_id, HW_U32 *awb_stats_ravg, HW_U32 *awb_sta
 	*awb_stats_bavg = b_avg_sum / (ISP_AWB_ROW*ISP_AWB_COL);
 	ISP_PRINT("awb_stats_ravg = %d, awb_stats_gavg = %d, awb_stats_bavg = %d\n",
 		*awb_stats_ravg, *awb_stats_gavg, *awb_stats_bavg);
+
+	return 0;
+}
+
+HW_S32 isp_get_awb_ir_win_cnt(int dev_id, HW_S32 *irlight_win_cnt, HW_S32 *normal_win_cnt)
+{
+	struct hw_isp_device *isp = NULL;
+
+	if (dev_id >= HW_ISP_DEVICE_NUM)
+		return -1;
+
+	isp = media_params.isp_dev[dev_id];
+	if (!isp) {
+		ISP_ERR("isp%d device is NULL!\n", dev_id);
+		return -1;
+	}
+
+	struct isp_lib_context *isp_gen = isp_dev_get_ctx(isp);
+	if (isp_gen == NULL)
+		return -1;
+
+	isp_get_software_ir_param(isp_gen);
+
+	*irlight_win_cnt = isp_gen->software_ir_info.irlight_win_cnt;
+	*normal_win_cnt = isp_gen->software_ir_info.normal_win_cnt;
 
 	return 0;
 }
@@ -4310,10 +4383,15 @@ HW_S32 isp_set_scene(int dev_id, scene_mode_t scene_mode)
 {
 	struct hw_isp_device *isp = NULL;
 	struct isp_lib_context *isp_gen;
-	int i, mode, count = (media_params.isp_sync_mode >> 16) & 0xff;
+	int i, mode;
 
-	if (count > 1) {
-			mode = media_params.isp_sync_mode & 0xffff;
+	if (dev_id >= HW_ISP_DEVICE_NUM) {
+		ISP_ERR("Invaild dev_id!!!\n");
+		return -1;
+	}
+
+	if (media_params.isp_sync_count[dev_id] > 1) {
+			mode = media_params.isp_sync_mode[dev_id];
 			for (i = 0; i < HW_ISP_DEVICE_NUM; i++) {
 				if (mode & (0x1 << i)) {
 					if (media_params.isp_use_cnt[i] == 0) {

@@ -25,11 +25,8 @@ LOCAL_SHARED_LIBS :=
 LOCAL_STATIC_LIBS :=
 
 #set dst file name: shared library, static library, execute bin.
-ifeq ($(LIBISP_CFG_COMPILE_DYNAMIC_LIB), Y)
-LOCAL_TARGET_DYNAMIC := libisp_dev
-else
+LOCAL_TARGET_DYNAMIC := 
 LOCAL_TARGET_STATIC := libisp_dev
-endif
 LOCAL_TARGET_BIN :=
 
 #generate include directory flags for gcc.

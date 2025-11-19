@@ -49,36 +49,42 @@ extern unsigned int isp_lib_log_param;
 #define ISP_AI_SCENE_CONF	0
 // #define AI_SCENE_SMOOTH
 
-#define ISP_AE_ROW	18
-#define ISP_AE_COL	24
+#define ISP_AE_ROW      18
+#define ISP_AE_COL      24
 
-#define ISP_AWB_ROW	24
-#define ISP_AWB_COL	32
+#define ISP_AWB_ROW     24
+#define ISP_AWB_COL     32
 
-#define ISP_AF_ROW	16
-#define ISP_AF_COL	24
+#define ISP_AF_ROW      16
+#define ISP_AF_COL      24
 
-#define ISP_HIST_NUM 256
-#define ISP_AFS_NUM 256
+#define ISP_HIST_NUM    256
+#define ISP_AFS_NUM     256
 
-#define ISP_MD_ROW	ISP_AE_ROW
-#define ISP_MD_COL	ISP_AE_COL
+#define ISP_MD_ROW ISP_AE_ROW
+#define ISP_MD_COL ISP_AE_COL
 
-#define ISP_GTM_ROW	ISP_AE_ROW
-#define ISP_GTM_COL	ISP_AE_COL
+#define ISP_GTM_ROW ISP_AE_ROW
+#define ISP_GTM_COL ISP_AE_COL
 
-#define ISP_PLTM_ROW	24
-#define ISP_PLTM_COL	32
+#define ISP_PLTM_ROW    24
+#define ISP_PLTM_COL    32
 
-#define ISP_D3D_K_ROW	24
-#define ISP_D3D_K_COL	32
+#define ISP_D3D_K_ROW   24
+#define ISP_D3D_K_COL   32
 
-#define SATURATION_MAX	150
+#define ISP_MOT_TEX_ROW 24
+#define ISP_MOT_TEX_COL 32
 
-#define LSC_PIC_SIZE	4096
+#define SATURATION_MAX  150
 
-#define H3A_PIC_OFFSET	-1000
-#define H3A_PIC_SIZE	2000
+#define LSC_PIC_SIZE    4096
+
+#define H3A_PIC_OFFSET  -1000
+#define H3A_PIC_SIZE    2000
+
+#define ISP_IR_DISTANCE_THRESHOLD 100
+#define ISP_IRLIGHT_COLOR_TEMP 8500
 
 #define FRAME_ID_1 1
 #define ISP_WIN_MODE_MATRIX 0
@@ -209,6 +215,11 @@ struct isp_d3d_k_stats_s {
 	HW_U8 k_start_avg;
 };
 
+struct isp_mot_tex_stats_s {
+	HW_U8 d3d_mot_stat[ISP_MOT_TEX_ROW*ISP_MOT_TEX_COL];
+	HW_U8 sharp_tex_stat[ISP_MOT_TEX_ROW*ISP_MOT_TEX_COL];
+};
+
 struct isp_stats_s {
 	struct isp_ae_stats_s ae_stats;
 	struct isp_awb_stats_s awb_stats;
@@ -216,6 +227,7 @@ struct isp_stats_s {
 	struct isp_afs_stats_s afs_stats;
 	struct isp_pltm_stats_s pltm_stats;
 	struct isp_d3d_k_stats_s d3d_k_stats;
+	struct isp_mot_tex_stats_s mot_tex_stats;
 };
 
 typedef struct isp_af_entity_context {
@@ -435,6 +447,14 @@ struct isp_algo_save {
 	struct local_wb_data_save *local_wb_save;
 };
 
+struct isp_software_ir_info {
+	HW_S32 rgain_ir;
+	HW_S32 bgain_ir;
+	HW_S32 irlight_win_cnt;
+	HW_S32 normal_win_cnt;
+	HW_S32 extra_win_cnt;
+};
+
 struct sensor_mipi_switch_entity_info {
 	struct sensor_mipi_switch_entity mipi_switch_info;
 	HW_U32 mipi_switch_enable;
@@ -551,7 +571,7 @@ struct isp_lib_context {
 	HW_U8 isp_ir_flag;
 	/* otp information*/
 	struct isp_sensor_otp_cfg sensor_otp;
-	unsigned short nr_msc_tab_ori[ISP_MSC_TBL_SIZE];
+	HW_U8 block_nr_tbl_ori[ISP_D3D_K_ROW * ISP_D3D_K_COL];
 	struct enc_VencVe2IspParam VencVe2IspParam;
 	struct npu_face_nr_config npu_nr_cfg;
 	struct sensor_temp_info temp_info;
@@ -561,8 +581,7 @@ struct isp_lib_context {
 	struct encpp_sharp_config encpp_sharp_cfg;
 	struct encpp_ldci_config encpp_ldci_cfg;
 #endif
-	HW_S32 rgain_ir;
-	HW_S32 bgain_ir;
+	struct isp_software_ir_info software_ir_info;
 	struct isp_debug_info debug_param_info;
 	struct sensor_mipi_switch_entity_info switch_info;
 	struct isp_ai_scene ai_scene;
@@ -693,6 +712,8 @@ int isp_ctx_save_exit(struct isp_lib_context *ctx);
 void isp_log_save_init(struct isp_lib_context *ctx);
 int isp_log_save_run(struct isp_lib_context *ctx);
 void isp_log_save_exit(struct isp_lib_context *ctx);
+
+void isp_get_software_ir_param(struct isp_lib_context *isp_gen);
 
 #endif //__BSP__ISP__ALGO__H
 

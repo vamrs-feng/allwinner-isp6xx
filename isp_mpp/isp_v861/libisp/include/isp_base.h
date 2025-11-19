@@ -25,7 +25,7 @@ void config_wdr(struct isp_lib_context *isp_gen, int flag);
 void config_gamma(struct isp_lib_context *isp_gen) ;
 void config_lens_table(struct isp_lib_context * isp_gen, int vcm_std_pos);
 void config_msc_table(struct isp_lib_context * isp_gen, int vcm_std_pos, int comp);
-void config_nr_msc_table(struct isp_lib_context * isp_gen, int flag);
+void config_block_nr_table(struct isp_lib_context * isp_gen, int flag);
 void config_lens_center(struct isp_lib_context * isp_gen);
 void config_band_step(struct isp_lib_context * isp_gen);
 void isp_handle_stats(struct isp_lib_context *isp_gen, const void *buffer);

@@ -63,72 +63,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#define CHECK_SOC_FT_ZONE 5
-
-int check_soc_ft_zone(int csi_id)
-{
-	int fd;
-	char buf[9];
-	int ret = 0;
-	int value = 0;
-
-	fd = open("/dev/sunxi_soc_info", O_RDONLY);
-	if (fd < 0){
-		printf("open /dev/sunxi_soc_info failed!");
-		return -1;
-	}
-
-	memset(buf, 0, sizeof(buf));
-	ret = ioctl(fd, CHECK_SOC_FT_ZONE, buf);
-	close(fd);
-
-	if (ret < 0) {
-		printf("ioctl err!\n");
-		return ret;
-	}
-
-	//value = atoi(buf);
-	sscanf(buf, "%x", &value);
-	ISP_PRINT("chipid: 0x%x!!!\n", value);
-	if ((value & 0x10) && csi_id == 1)
-		return -1;
-	else
-		return 0;
-}
-
-int check_soc_ft_fps(int *frame_mode)
-{
-	int fd;
-	char buf[9];
-	int ret = 0;
-	int value = 0;
-
-	fd = open("/dev/sunxi_soc_info", O_RDONLY);
-	if (fd < 0){
-		printf("open /dev/sunxi_soc_info failed!");
-		return -1;
-	}
-
-	memset(buf, 0, sizeof(buf));
-	ret = ioctl(fd, CHECK_SOC_FT_ZONE, buf);
-	close(fd);
-
-	if (ret < 0) {
-		printf("ioctl err!\n");
-		return ret;
-	}
-
-	//value = atoi(buf);
-	sscanf(buf, "%x", &value);
-	if (value & 0x20) {
-		*frame_mode = 1;
-		ISP_PRINT("Size cantnot exceed 4K25fps!!!\n");
-	} else
-		*frame_mode = 0;
-
-    return 0;
-}
-
 int video_init(struct isp_video_device *video)
 {
 	struct hw_isp_media_dev *media = video->priv;
@@ -174,7 +108,6 @@ int video_set_fmt(struct isp_video_device *video, struct video_fmt *vfmt)
 	struct v4l2_input inp;
 	struct v4l2_streamparm parms;
 	struct sensor_isp_cfg sensor_isp_cfg;
-	int frame_mode;
 	struct csi_ve_online_cfg ve_online_cfg;
 
 	if (vfmt->large_dma_merge_en) {
@@ -183,7 +116,15 @@ int video_set_fmt(struct isp_video_device *video, struct video_fmt *vfmt)
 			ISP_ERR("VIDIOC_SET_DMA_MERGE %d error!\n", vfmt->large_dma_merge_en);
 		}
 	}
+	if (vfmt->tdmtime_embed_en || vfmt->ispfeinfo_embed_en) {
+		if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_SET_TDMTIME_EMBED, &vfmt->tdmtime_embed_en)) {
+			ISP_ERR("VIDIOC_VIN_SET_TDMTIME_EMBED %d error!\n", vfmt->tdmtime_embed_en);
+		}
 
+		if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_SET_ISPFE_EMBED, &vfmt->ispfeinfo_embed_en)) {
+			ISP_ERR("VIDIOC_VIN_SET_ISPFE_EMBED %d error!\n", vfmt->ispfeinfo_embed_en);
+		}
+	}
 /*
 	// Merge interruption is disabled by default
 	struct mrg_int_ch_cfg int_ch_cfg;
@@ -280,15 +221,6 @@ int video_set_fmt(struct isp_video_device *video, struct video_fmt *vfmt)
 	}
 	vfmt->capturemode = parms.parm.capture.capturemode;
 
-	check_soc_ft_fps(&frame_mode);
-	if (frame_mode) {
-		if (fmt.fmt.pix_mp.width >= 3840 && fmt.fmt.pix_mp.height >= 2160 &&
-			parms.parm.capture.timeperframe.denominator > 25) {
-			ISP_ERR("Not support size that exceed 4K25fps!!!\n");
-			return -1;
-		}
-	}
-
 	video->type = vfmt->type;
 	video->memtype = vfmt->memtype;
 	video->capturemode = vfmt->capturemode;
@@ -309,8 +241,9 @@ int video_set_fmt(struct isp_video_device *video, struct video_fmt *vfmt)
 	memset(&speeddn_cfg, 0, sizeof speeddn_cfg);
 	speeddn_cfg.pix_num = vfmt->pixel_num;
 	speeddn_cfg.tdm_speed_down_en = vfmt->tdm_speed_down_en;
-	speeddn_cfg.tdm_tx_valid_num = 1;
-	speeddn_cfg.tdm_tx_invalid_num = 0;
+	speeddn_cfg.tdm_tx_valid_num = vfmt->tdm_tx_valid_num;
+	speeddn_cfg.tdm_tx_invalid_num = vfmt->tdm_tx_invalid_num;
+	speeddn_cfg.tdm_tx_valid_num_offset = vfmt->tdm_tx_valid_num_offset;
 	if (-1 == ioctl(video->entity->fd, VIDIOC_SET_TDM_SPEEDDN_CFG, &speeddn_cfg)) {
 		ISP_ERR("VIDIOC_SET_TDM_SPEEDDN_CFG error!\n");
 		return -1;
@@ -334,6 +267,51 @@ int video_set_fmt(struct isp_video_device *video, struct video_fmt *vfmt)
 		if (-1 == ioctl(video->entity->fd, VIDIOC_SET_TDM_RXBUF_CNT, &vfmt->tdm_rxbuf_cnt)) {
 				ISP_ERR("VIDIOC_SET_TDM_RXBUF_CNT %d error!\n", vfmt->tdm_rxbuf_cnt);
 			}
+	}
+	if (1 == vfmt->nbufs) {
+		if (ioctl(video->entity->fd, VIDIOC_VIN_SET_BUFFER_MODE, &vfmt->nbufs)) {
+			ISP_ERR("VIDIOC_SET_BUFFER_MODE fail %d error!\n", vfmt->nbufs);
+		}
+	}
+	return 0;
+}
+
+
+int video_set_aiisp_cfg(struct isp_video_device *video, struct tdm_aiisp_cfg *paiisp_cfg)
+{
+	if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_SET_AIISP_MODE, paiisp_cfg)) {
+		ISP_ERR("VIDIOC_VIN_SET_AIISP_MODE error!\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int video_get_aiisp_info(struct isp_video_device *video, struct tdm_aiisp_inform *paiisp_inform)
+{
+	if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_GET_AIISP_INFORM, paiisp_inform)) {
+		ISP_ERR("VIDIOC_VIN_GET_AIISP_INFORM error!\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int video_set_aiisp_switch(struct isp_video_device *video, enum aiisp_switch_dir *paiisp_dir)
+{
+	if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_AIISP_SWITCH, paiisp_dir)) {
+		ISP_ERR("VIDIOC_VIN_AIISP_SWITCH error!\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int video_set_vbv_share_yuv(struct isp_video_device *video, unsigned int enable)
+{
+	if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_SET_VBV_SHARE_YUV, &enable)) {
+		ISP_ERR("VIDIOC_VIN_SET_VBV_SHARE_YUV error!\n");
+		return -1;
 	}
 
 	return 0;
@@ -705,7 +683,8 @@ int video_queue_buffer(struct isp_video_device *video, unsigned int buf_id)
 			if (-1 == ioctl(video->entity->fd, VIDIOC_EXPBUF, &exp)) {
 				ISP_ERR("VIDIOC_EXPBUF error\n");
 			} else {
-				ISP_PRINT("buffer %d plane 0x%x DMABUF fd is %d\n", buf.index, buf.m.planes[j].m.mem_offset, exp.fd);
+				ISP_PRINT("[%d/%d]v4l2 buffer %d, %d-%d-0x%x-0x%x, DMABUF fd is %d", j, video->nplanes, buf.index,
+					buf.m.planes[j].bytesused, buf.m.planes[j].length, buf.m.planes[j].m.mem_offset, buf.m.planes[j].data_offset, exp.fd);
 			}
 			buffer->planes[j].dma_fd = exp.fd;
 		}
@@ -1139,7 +1118,7 @@ int video_fastboot_set_cfg_attr(struct isp_video_device *video, struct isp_cfg_a
 int video_fastboot_get_cfg_attr(struct isp_video_device *video, struct isp_cfg_attr_data *fastboot_isp_cfg_attr)
 {
 	if (-1 == ioctl(video->entity->fd, VIDIOC_GET_ISP_CFG_ATTR, fastboot_isp_cfg_attr)) {
-		ISP_ERR("video%d VIDIOC_UPDATE_ISP_CFG_ATTR failed, cfg_id:%d\n", (int)video->id, fastboot_isp_cfg_attr->cfg_id);
+		ISP_ERR("video%d VIDIOC_GET_ISP_CFG_ATTR failed, cfg_id:%d\n", (int)video->id, fastboot_isp_cfg_attr->cfg_id);
 		return -1;
 	}
 
@@ -1202,36 +1181,6 @@ int video_set_tdm_drop_frame_num(struct isp_video_device *video, unsigned int dr
 	drop_frame_num = drop_num;
 	if (-1 == ioctl(video->entity->fd, VIDIOC_SET_TDM_DROP_FRAME, &drop_frame_num)) {
 		ISP_ERR("video%d video_set_tdm_drop_frame_num failed!!!\n", (int)video->id);
-		return -1;
-	}
-
-	return 0;
-}
-
-int video_tdm_raw_npu_mode_disable(struct isp_video_device *video, unsigned char not_npu_mode)
-{
-	if (-1 == ioctl(video->entity->fd, VIDIOC_SET_TDM_NPU_MODE, &not_npu_mode)) {
-		ISP_ERR("video%d VIDIOC_SET_TDM_NPU_MODE failed!!!\n", (int)video->id);
-		return -1;
-	}
-
-	return 0;
-}
-
-int video_set_input_bit_width_start(struct isp_video_device *video, enum set_bit_width bitwidth)
-{
-	if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_SET_INPUT_BIT_WIDTH_START, &bitwidth)) {
-		ISP_ERR("video%d VIDIOC_VIN_SET_INPUT_BIT_WIDTH_START failed!!!\n", (int)video->id);
-		return -1;
-	}
-
-	return 0;
-}
-
-int video_set_input_bit_width_stop(struct isp_video_device *video, enum set_bit_width bitwidth)
-{
-	if (-1 == ioctl(video->entity->fd, VIDIOC_VIN_SET_INPUT_BIT_WIDTH_STOP, &bitwidth)) {
-		ISP_ERR("video%d VIDIOC_VIN_SET_INPUT_BIT_WIDTH_STOP failed!!!\n", (int)video->id);
 		return -1;
 	}
 

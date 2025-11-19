@@ -32,7 +32,7 @@
 #include "../socket_protocol.h"
 #include "../thread_pool.h"
 #include "../log_handle.h"
-#include "linux/videodev2.h"
+#include <linux/videodev2.h>
 
 #include "server_core.h"
 #include "capture_image.h"
@@ -296,6 +296,9 @@ void *sock_handle_preview_thread(void *params)
 			cap_fmt.length = 0;
 			cap_fmt.index =  ntohl(comm_packet.index);
 			cap_fmt.framecount = ntohl(comm_packet.framecount) & 0x0000ffff;
+			cap_fmt.stitch_mode = ntohl(comm_packet.reserved2[0]);
+			cap_fmt.ptn_en = ntohl(comm_packet.reserved2[1]);
+			cap_fmt.isp = ntohl(comm_packet.reserved2[2]);
 			memset(cap_fmt.width_stride, 0, sizeof(cap_fmt.width_stride));
 			switch (cap_fmt.format) {
 			case V4L2_PIX_FMT_NV12:
@@ -425,6 +428,9 @@ void *sock_handle_capture_thread(void *params)
 			cap_fmt.length = 0;
 			cap_fmt.framecount = ntohl(comm_packet.framecount);
 			cap_fmt.index =  ntohl(comm_packet.index);
+			cap_fmt.stitch_mode = ntohl(comm_packet.reserved2[0]);
+			cap_fmt.ptn_en = ntohl(comm_packet.reserved2[1]);
+			cap_fmt.isp = ntohl(comm_packet.reserved2[2]);
 			memset(cap_fmt.width_stride, 0, sizeof(cap_fmt.width_stride));
 			TRANSFER_SIZE = ((cap_fmt.width/16+1)*16) * ((cap_fmt.height/16+1)*16) * 2;
 			cap_fmt.buffer = (unsigned char *)malloc(TRANSFER_SIZE * cap_fmt.framecount); // 4M*cap_fmt.framecount
@@ -739,12 +745,12 @@ void *sock_handle_tuning_thread(void *params)
 			cfg_length = ntohl(comm_packet.data_length);
 			isp_sel = ntohl(comm_packet.reserved[0]);
 			vich = ntohl(comm_packet.reserved[1]);
-			stitch_mode = ntohl(comm_packet.framecount) >> 16;
+			stitch_mode = ntohl(comm_packet.reserved2[0]);
 			if (SOCK_CMD_GET_CFG == type) {
 				LOG("%s: get cfg(isp %d) - group:%02x, cfgs:%08x, length:%d\n", __FUNCTION__, isp_sel, group_id, cfg_ids, cfg_length);
 				if (!ini_cfg.enable) {
-					if (stitch_mode == STITCH_2IN1_LINNER) {
-						ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINNER);
+					if (stitch_mode == STITCH_2IN1_LINEAR) {
+						ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINEAR);
 						if (ret < 0) {
 							LOG("%s: failed to select isp stitch mode (isp %d)\n", __FUNCTION__, isp_sel);
 							comm_packet.ret = htonl(SOCK_CMD_RET_FAILED);
@@ -797,8 +803,8 @@ void *sock_handle_tuning_thread(void *params)
 			} else if (SOCK_CMD_SET_CFG == type) {
 				LOG("%s: set cfg(isp %d) - group:%02x, cfgs:%08x, length:%d\n", __FUNCTION__, isp_sel, group_id, cfg_ids, cfg_length);
 				if (!ini_cfg.enable) {
-					if (stitch_mode == STITCH_2IN1_LINNER) {
-						ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINNER);
+					if (stitch_mode == STITCH_2IN1_LINEAR) {
+						ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINEAR);
 						if (ret < 0) {
 							LOG("%s: failed to select isp stitch mode (isp %d)\n", __FUNCTION__, isp_sel);
 							comm_packet.ret = htonl(SOCK_CMD_RET_FAILED);
@@ -832,7 +838,7 @@ void *sock_handle_tuning_thread(void *params)
 						convert_tuning_cfg_to_local(group_id, cfg_ids, buffer);
 						//printf("%s: ready to set isp cfg\n", __FUNCTION__);
 						if (!ini_cfg.enable) {
-							if (stitch_mode == STITCH_2IN1_LINNER) {
+							if (stitch_mode == STITCH_2IN1_LINEAR) {
 								if (isp_sel % 2 == 0)
 									ret = isp_set_cfg(isp_sel + 1, group_id, cfg_ids, (void *)buffer);
 								else
@@ -863,8 +869,8 @@ void *sock_handle_tuning_thread(void *params)
 			} else if (SOCK_CMD_UPDATE_CFG == type) {
 				LOG("%s: update isp - %d\n", __FUNCTION__, isp_sel);
 				if (!ini_cfg.enable) {
-					if (stitch_mode == STITCH_2IN1_LINNER) {
-						ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINNER);
+					if (stitch_mode == STITCH_2IN1_LINEAR) {
+						ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINEAR);
 						if (ret < 0) {
 							LOG("%s: failed to select isp stitch mode (isp %d)\n", __FUNCTION__, isp_sel);
 							comm_packet.ret = htonl(SOCK_CMD_RET_FAILED);
@@ -889,7 +895,7 @@ void *sock_handle_tuning_thread(void *params)
 						ret = sock_write(sock_fd, (const void *)&comm_packet, sizeof(comm_packet), SOCK_DEFAULT_TIMEOUT);
 						continue;
 					}
-					if (stitch_mode == STITCH_2IN1_LINNER) {
+					if (stitch_mode == STITCH_2IN1_LINEAR) {
 						if (isp_sel % 2 == 0)
 							ret = isp_update(isp_sel + 1);
 						else
@@ -913,8 +919,8 @@ void *sock_handle_tuning_thread(void *params)
 				ret = sock_write(sock_fd, (const void *)&comm_packet, sizeof(comm_packet), SOCK_DEFAULT_TIMEOUT);
 			} else if (SOCK_CMD_ISP_SEL == type) {
 				LOG("%s: set isp - %d\n", __FUNCTION__, isp_sel);
-				if (stitch_mode == STITCH_2IN1_LINNER) {
-					ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINNER);
+				if (stitch_mode == STITCH_2IN1_LINEAR) {
+					ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINEAR);
 					if (ret < 0) {
 						LOG("%s: failed to select isp stitch mode (isp %d)\n", __FUNCTION__, isp_sel);
 						comm_packet.ret = htonl(SOCK_CMD_RET_FAILED);
@@ -1179,7 +1185,7 @@ void *sock_handle_statistics_thread(void *params)
 	int timeout_times = 0;
 	int stitch_mode = 0;
 	struct ToolsIniTuning_cfg ini_cfg = GetIniTuningEn();
-	int isp_sel_band = 0;
+	int isp_sel_band = 0, tbl_w, tbl_h;
 
 	LOG("%s: starts - %d\n", __FUNCTION__, sock_fd);
 	g_thread_status |= TH_STATUS_STATISTICS;
@@ -1193,12 +1199,13 @@ void *sock_handle_statistics_thread(void *params)
 			timeout_times = 0;
 			type = comm_packet.cmd_ids[1];
 			isp_sel = ntohl(comm_packet.reserved[0]);
-			stitch_mode = ntohl(comm_packet.framecount) >> 16;
+			stitch_mode = ntohl(comm_packet.reserved2[0]);
 
-			if (SOCK_CMD_STAT_AE == type || SOCK_CMD_STAT_AWB == type || SOCK_CMD_STAT_AF == type || SOCK_CMD_STAT_TDNF == type) {
+			if (SOCK_CMD_STAT_AE == type || SOCK_CMD_STAT_AWB == type || SOCK_CMD_STAT_AF == type || SOCK_CMD_STAT_TDNF == type ||
+				SOCK_CMD_STAT_MOTION_TEXTURE == type) {
 				if (!ini_cfg.enable) {
-					if (stitch_mode == STITCH_2IN1_LINNER) {
-						ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINNER);
+					if (stitch_mode == STITCH_2IN1_LINEAR) {
+						ret = select_isp_stitch_mode(isp_sel, STITCH_2IN1_LINEAR);
 						if (ret < 0) {
 							LOG("%s: failed to select isp stitch mode (isp %d)\n", __FUNCTION__, isp_sel);
 							comm_packet.ret = htonl(SOCK_CMD_RET_FAILED);
@@ -1232,14 +1239,23 @@ void *sock_handle_statistics_thread(void *params)
 					} else if (SOCK_CMD_STAT_AF == type) {
 						stats_info = &stats_context->stats.af_stats;
 						stats_length = sizeof(struct isp_af_stats_s);
-					} else {
+					} else if (SOCK_CMD_STAT_TDNF == type) {
 						stats_info = &stats_context->stats.d3d_k_stats;
 						stats_length = sizeof(struct isp_d3d_k_stats_s);
+					} else if (SOCK_CMD_STAT_MOTION_TEXTURE == type) {
+						stats_info =  &stats_context->stats.mot_tex_stats;
+						stats_length = sizeof(struct isp_mot_tex_stats_s);
+					} else {
+						stats_length = 0;
+						LOG("%s: unknown CMD. type = %d\n", __FUNCTION__, type);
 					}
 					//output_3a_info(stats_info, type);
-					hton_3a_info(stats_info, type);
+					//hton_3a_info(stats_info, &tbl_w, &tbl_h, type);
+					get_statistics_tbl_size(type, &tbl_w, &tbl_h);
 
 					comm_packet.data_length = htonl(stats_length);
+					comm_packet.reserved[1] = htonl(tbl_w);
+					comm_packet.reserved[2] = htonl(tbl_h);
 					ret = sock_write_check_packet(__FUNCTION__, sock_fd, &comm_packet, SOCK_CMD_GET_STAT, SOCK_DEFAULT_TIMEOUT);
 					if (SOCK_RW_CHECK_OK == ret) {
 						ret = sock_write(sock_fd, stats_info, stats_length, SOCK_DEFAULT_TIMEOUT);
@@ -1552,8 +1568,8 @@ void *sock_handle_set_input_thread(void *params)
 			sensor_in.wdr = tmp & 0x0000ffff;
 			sensor_in.index =  ntohl(comm_packet.index);
 			sensor_in.format = ntohl(comm_packet.reserved[3]);
-			sensor_in.stitch_mode = ntohl(comm_packet.framecount) >> 16;
-			sensor_in.ptn_en = ntohl(comm_packet.framecount) & 0xf;
+			sensor_in.stitch_mode = ntohl(comm_packet.reserved2[0]);
+			sensor_in.ptn_en = ntohl(comm_packet.reserved2[1]);
 			LOG("%s: isp %d, vich %d, %dx%d@%d, wdr %d.\n", __FUNCTION__,
 				sensor_in.isp, sensor_in.channel,
 				sensor_in.width, sensor_in.height,
@@ -1565,8 +1581,8 @@ void *sock_handle_set_input_thread(void *params)
 				if (CAP_ERR_NONE == ret) {
 					/* set ok */
 					msleep(1000);
-					if (sensor_in.stitch_mode == STITCH_2IN1_LINNER) {
-						ret = select_isp_stitch_mode(sensor_in.isp, STITCH_2IN1_LINNER);
+					if (sensor_in.stitch_mode == STITCH_2IN1_LINEAR) {
+						ret = select_isp_stitch_mode(sensor_in.isp, STITCH_2IN1_LINEAR);
 						if (ret < 0) {
 							LOG("%s: failed to select isp stitch mode (isp %d, ch %d)\n", __FUNCTION__,
 							sensor_in.isp, sensor_in.channel);
@@ -1817,7 +1833,7 @@ void *sock_handle_isp_version_thread(void *params)
 
 #ifdef ANDROID_VENCODE
 
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
+#if (ISP_VERSION == 610)
 static int encoderEventHandler(
             VideoEncoder* pEncoder,
             void* pAppData,
@@ -1858,12 +1874,15 @@ void *sock_handle_preview_vencode_thread(void *params)
 	int sock_fd = (int)params;
 	int timeout_times = 0, tmp = 0, encode_init = 0, buf_init = 0, type = 0, isp_sel = 0, buf_size = 0, buf_size_cur = 0;
 	int encpp_en, color_space;
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-	struct sEncppSharpParam encpp_sharp_param;
+
 	//struct s3DfilterParam encoder_3d_param;
 	struct s2DfilterParam encoder_2d_param;
 	int EnvLv;
-#endif
+	int ispbe_top_en;
+	sEncppIspbeTopConfig ispbe_top_param;
+	sEncppIspbeSharpConfig ispbe_sharp_param;
+	sEncppIspbeLdciConfig ispbe_ldci_param;
+
 	capture_format cap_fmt;
 	encode_param_t encode_param;
     unsigned char head_num;
@@ -1901,6 +1920,7 @@ void *sock_handle_preview_vencode_thread(void *params)
 			cap_fmt.length = 0;
 			cap_fmt.index =  ntohl(comm_packet.index);
 			cap_fmt.framecount = ntohl(comm_packet.framecount) & 0x0000ffff;
+			cap_fmt.stitch_mode = ntohl(comm_packet.reserved2[0]);
 			memset(cap_fmt.width_stride, 0, sizeof(cap_fmt.width_stride));
 			switch (cap_fmt.format) {
 			case V4L2_PIX_FMT_NV12:
@@ -1977,7 +1997,6 @@ void *sock_handle_preview_vencode_thread(void *params)
 				//just need to init vencoder by 1 time
 				if (encode_init == 0) {
 					ret = set_vencode_config(&cap_fmt, &encode_param, type);
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 					isp_get_attr_cfg(isp_sel, ISP_CTRL_COLOR_SPACE, &color_space);
 					if (color_space == 0) {
 						encode_param.eColorSpace = VENC_BT601;
@@ -2000,7 +2019,6 @@ void *sock_handle_preview_vencode_thread(void *params)
 					} else {
 						LOG("%s: encode_param.eColorSpace fail. %d\n", __FUNCTION__, encode_param.eColorSpace);
 					}
-#endif
 
 					if (type == SOCK_CMD_VENCODE_PPSSPS || type == SOCK_CMD_VENCODE_STREAM)
 						encode_param.bEnableGetWbYuv = 0;
@@ -2021,10 +2039,8 @@ void *sock_handle_preview_vencode_thread(void *params)
 						sock_write(sock_fd, (const void *)&comm_packet, sizeof(comm_packet), SOCK_DEFAULT_TIMEOUT);
 						continue;
 					} else {
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 	                    encoderCallback.EventHandler = encoderEventHandler;
 	                    EncoderSetCallbacks(&encode_param, &encoderCallback, &isp_sel);
-#endif
 
 						ret = EncoderPrepare(&encode_param);
 						if (ret) {
@@ -2046,21 +2062,22 @@ void *sock_handle_preview_vencode_thread(void *params)
 
 			if (encode_init == 1 && (type == SOCK_CMD_VENCODE_PPSSPS || type == SOCK_CMD_VENCODE_STREAM || type == SOCK_CMD_VENCODE_ENCPP_YUV)) {
 				if (!ini_cfg.enable) {
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
-					isp_get_encpp_cfg(isp_sel, ISP_CTRL_ENCPP_EN, &encpp_en);
-					//isp_get_encpp_cfg(isp_sel, ISP_CTRL_ENCODER_3DNR_CFG, &encoder_3d_param);
-					isp_get_encpp_cfg(isp_sel, ISP_CTRL_ENCODER_2DNR_CFG, &encoder_2d_param);
-					isp_get_attr_cfg(isp_sel, ISP_CTRL_EV_IDX, &EnvLv);
-					EncoderSetParamEnableSharp(&encode_param, encpp_en);
-					//EncoderSetParam3DFliter(&encode_param, &encoder_3d_param);
-					EncoderSetParam2DFliter(&encode_param, &encoder_2d_param);
-					EncoderSetEnvLv(&encode_param, &EnvLv);
-					if (encpp_en) {
-						isp_get_encpp_cfg(isp_sel, ISP_CTRL_ENCPP_STATIC_CFG, &encpp_sharp_param.mStaticParam);
-						isp_get_encpp_cfg(isp_sel, ISP_CTRL_ENCPP_DYNAMIC_CFG, &encpp_sharp_param.mDynamicParam);
-						EncoderSetParamSharpConfig(&encode_param, &encpp_sharp_param);
-					}
+					isp_get_encpp_ispbe_cfg(isp_sel, ISP_CTRL_ENCPP_ISPBE_ENABLE, &ispbe_top_en);
+					isp_get_encpp_ispbe_cfg(isp_sel, ISP_CTRL_ENCPP_ISPBE_TOP_CFG, &ispbe_top_param);
+					isp_get_encpp_ispbe_cfg(isp_sel, ISP_CTRL_ENCPP_ISPBE_SHARP_CFG, &ispbe_sharp_param);
+					isp_get_encpp_ispbe_cfg(isp_sel, ISP_CTRL_ENCPP_ISPBE_LDCI_CFG, &ispbe_ldci_param);
+#ifdef EMBED_DATA_MODE
+					EncoderSetParamIspbeEmbedEnable(&encode_param, 1);
 #endif
+					if (ispbe_top_en) {
+						EncoderSetParamIspbeEnable(&encode_param, 1);
+					} else {
+						EncoderSetParamIspbeEnable(&encode_param, 0);
+					}
+					EncoderSetParamIspbeTopConfig(&encode_param, &ispbe_top_param);
+					EncoderSetParamIspbeSharpConfig(&encode_param, &ispbe_sharp_param);
+					EncoderSetParamIspbeLdciConfig(&encode_param, &ispbe_ldci_param);
+
 					EncoderParamUpdate(&encode_param);
 					ret = get_capture_vencode_buffer(&cap_fmt, &encode_param, type);
 				} else {
@@ -2097,7 +2114,6 @@ void *sock_handle_preview_vencode_thread(void *params)
 					}
 				}
 			} else if(type == SOCK_CMD_VENCODE_STOP) {
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 				if (!ini_cfg.enable) {
 					VencVe2IspParam pVe2IspParam;
 					memset(&pVe2IspParam, 0, sizeof(VencVe2IspParam));
@@ -2105,7 +2121,6 @@ void *sock_handle_preview_vencode_thread(void *params)
 					pVe2IspParam.d3d_level = 256;
 					isp_set_attr_cfg(isp_sel, ISP_CTRL_VENC2ISP_PARAM, &pVe2IspParam);
 				}
-#endif
 				LOG("reveive stop socket command, break loop and close vencoder\n");
 				comm_packet.ret = htonl(SOCK_CMD_RET_OK);
 				ret = sock_write(sock_fd, (const void *)&comm_packet, sizeof(comm_packet), SOCK_DEFAULT_TIMEOUT);

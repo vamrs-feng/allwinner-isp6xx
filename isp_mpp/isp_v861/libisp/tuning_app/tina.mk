@@ -65,22 +65,6 @@ LOCAL_SHARED_LIBS += \
     libVE \
     libcdc_base
 
-LOCAL_SHARED_LIBS += \
-    libisp_dev \
-    libisp_ini \
-    libiniparser \
-    libisp_ae \
-    libisp_af \
-    libisp_afs \
-    libisp_awb \
-    libisp_base \
-    libisp_gtm \
-    libisp_iso \
-    libisp_math \
-    libisp_md \
-    libisp_pltm \
-    libisp_rolloff
-
 LOCAL_STATIC_LIBS :=
 
 else

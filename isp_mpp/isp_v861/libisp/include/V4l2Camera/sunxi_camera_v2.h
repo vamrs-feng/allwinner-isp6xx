@@ -139,10 +139,10 @@ typedef union {
 	struct {
 		unsigned int af_sharp:16;
 		unsigned int hdr_cnt:4;
-		unsigned int flash_ok:2;
+		unsigned int flash_ok:1;
 		unsigned int capture_ok:1;
 		unsigned int fast_capture_ok:1;
-		unsigned int res0:8;
+		unsigned int res0:9;
 	} bits;
 } IMAGE_FLAG_t;
 
@@ -305,20 +305,42 @@ struct vin_pattern_config {
 	__u32 ptn_type;
 };
 
-enum dma_buffer_num {
-	BK_MUL_BUFFER = 0,
-	BK_ONE_BUFFER,
-	BK_TWO_BUFFER,
+struct vin_reset_time {
+	__u32 reset_time;
 };
 
-struct csi_ve_online_cfg {
-	__u8 ve_online_en;
-	enum dma_buffer_num dma_buf_num;
+struct sensor_standby_status {
+	__u32 stby_stat;
+};
+
+struct parser_fps_ds {
+	__u32 ch0_fps_ds;
+	__u32 ch1_fps_ds;
+	__u32 ch2_fps_ds;
+	__u32 ch3_fps_ds;
 };
 
 struct sensor_isp_cfg {
 	__u8 isp_wdr_mode;
 	__u8 large_image;
+};
+
+enum dma_buffer_num {
+	BK_MUL_BUFFER = 0,
+	BK_ONE_BUFFER,
+	BK_TWO_BUFFER,
+	MUL_BK_SHARE_ONE_BUFFER,
+};
+
+struct csi_ve_online_cfg {
+	__u8 ve_online_en;
+	__u8 ve_online_support_flag;
+	enum dma_buffer_num dma_buf_num;
+};
+
+struct vipp_shrink_cfg {
+	unsigned int left;
+	unsigned int top;
 };
 
 enum mipi_pix_num {
@@ -328,6 +350,7 @@ enum mipi_pix_num {
 
 struct tdm_speeddn_cfg {
 	enum mipi_pix_num pix_num;
+	unsigned char tdm_tx_valid_num_offset;
 	unsigned char tdm_speed_down_en;
 	unsigned char tdm_tx_valid_num;
 	unsigned char tdm_tx_invalid_num;
@@ -360,9 +383,86 @@ enum mrg_bk_ch_sel {
 	MRG_VIDEO23_CH = 0x800000,
 };
 
+struct isp_memremap_cfg {
+	unsigned char en;
+	void *vir_addr;
+	unsigned int size;
+};
+
 struct mrg_int_ch_cfg {
 	unsigned int mrg_ch_sel;
 	unsigned int trig_level;
+};
+
+/*
+ * Calculate for irregular nodes such as sun55iw3p1
+ * if video0,video4,video8,video12 belong to sensor0 , video16-17 belong to sensor1
+ * TVIN_VIDEO_MAX should be set to 16
+ * TVIN_VIDEO_STRIP shoild be set to 4
+ */
+#define TVIN_VIDEO_MAX 16
+#define TVIN_VIDEO_STRIP 4
+
+/*
+ *If two chips need to use TVin mode, then this define
+ *is the separation of video nodes of the two chips.
+ *e.g:TVIN_SEPARATE is 2. This means that video0 and
+ *    Video1 belong to the first chips.
+ */
+#define TVIN_SEPARATE		4
+#define TVIN_CH_SIZE		8
+enum tvin_work_mode {
+	Tvd_Input_Type_1CH_CVBS = 0,
+	Tvd_Input_Type_2CH_CVBS,
+	Tvd_Input_Type_4CH_CVBS,
+	Tvd_Input_Type_YCBCR,
+	Tvd_Input_Type_YCBCR_CVBS,
+	Tvd_Input_Type_SIZE,
+};
+
+enum tvin_input_fmt {
+	CVBS_PAL = 0,
+	CVBS_NTSC,
+	AHD720P25,
+	AHD720P30,
+	AHD1080P25,
+	AHD1080P30,
+	YCBCR_480I,
+	YCBCR_576I,
+	YCBCR_480P,
+	YCBCR_576P,
+	CVBS_H1440_PAL,
+	CVBS_H1440_NTSC,
+	CVBS_FRAME_PAL,
+	CVBS_FRAME_NTSC,
+	INPUT_FMT_SIZE,
+};
+
+struct tvin_init_info {
+	__u32 ch_id;
+	__u32 input_fmt[TVIN_CH_SIZE];
+	__u32 height;
+	__u32 widht;
+	__u32 ch_num;
+	__u16 ch_3d_filter;
+	__u16 fps;
+	__u16 field;
+	__u16 work_mode;
+	__u16 init_all_ch;
+	__u16 init_after_stream_on;
+	__s32 reserved[8];
+};
+
+struct sensor_resolution {
+	__u32 width_max;
+	__u32 height_max;
+	__u32 width_min;
+	__u32 height_min;
+};
+
+struct bk_buffer_align {
+	unsigned char lbc_align_en;
+	unsigned char yuv_align_en;
 };
 
 struct isp_ir_awb_gain {
@@ -376,10 +476,15 @@ struct isp_ae_roi_attr {
 	struct isp_h3a_coor_win coor;
 };
 
+struct encpp_ispbe_config {
+	int encpp_ispbe_en;
+	struct encpp_top_config encpp_ispbe_top_cfg;
+	struct encpp_sharp_config encpp_ispbe_sharp_cfg;
+	struct encpp_ldci_config encpp_ispbe_ldci_cfg;
+};
+
 struct isp_encpp_cfg_attr_data {
-	signed char encpp_en;
-//	struct encpp_static_sharp_config encpp_static_sharp_cfg;
-//	struct encpp_dynamic_sharp_config encpp_dynamic_sharp_cfg;
+	struct encpp_ispbe_config encpp_ispbe_cfg;
 	struct encoder_3dnr_config encoder_3dnr_cfg;
 	struct encoder_2dnr_config encoder_2dnr_cfg;
 };
@@ -433,19 +538,8 @@ struct isp_cfg_attr_data {
 	struct ae_face_cfg ae_face_info;
 	struct sensor_mipi_switch_entity mipi_switch_info;
 	int ae_ev_idx_status;
+	struct isp_wb_gain wb_gain;
 };
-
-struct isp_memremap_cfg {
-	unsigned char en;
-	void *vir_addr;
-	unsigned int size;
-};
-
-struct bk_buffer_align {
-    unsigned char lbc_align_en;
-    unsigned char yuv_align_en;
-};
-
 
 #define VIDIOC_ISP_AE_STAT_REQ \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 1, struct isp_stat_buf)
@@ -507,8 +601,6 @@ struct bk_buffer_align {
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 29, unsigned int)
 #define VIDIOC_SET_TDM_RXBUF_CNT \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 30, unsigned int)
-#define VIDIOC_SET_TDM_NPU_MODE \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 31, unsigned char)
 /*
  * Events
  *
@@ -548,15 +640,6 @@ struct vin_isp_stat_event_status {
 	__u8 buf_err;
 };
 
-struct vin_isp_tdm_event_status {
-	__u8 dev_id;
-	void *iommu_buf;
-	__u32 buf_size;
-	__u8 buf_id;
-	__u32 head_len;
-	__u32 fill_len;
-};
-
 struct vin_isp_hdr_event_data {
 	__u32			cmd;
 	struct isp_hdr_ctrl	hdr;
@@ -588,6 +671,15 @@ struct isp_tdm_map_cfg {
 	unsigned char mmap_buf_id;
 };
 
+struct vin_isp_tdm_event_status {
+	__u8 dev_id;
+	void *iommu_buf;
+	__u32 buf_size;
+	__u8 buf_id;
+	__u32 head_len;
+	__u32 fill_len;
+};
+
 struct vin_isp_tdm_data {
 	void *buf;
 	__u32 buf_size;
@@ -602,7 +694,6 @@ struct vin_isp_tdm_data {
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 42, struct vin_isp_tdm_data)
 #define VIDIOC_VIN_TDM_SEND_DATA \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 43, struct vin_isp_tdm_data)
-
 /*
 * large image dma merge mode
 *
@@ -648,14 +739,18 @@ struct sensor_exp_gain {
 struct sensor_fps {
 	int fps;
 };
+struct sensor_temp {
+	int temp;
+};
+
+struct sensor_output_fmt {
+	unsigned int field;
+	unsigned int ch_id;
+};
 
 struct sensor_flip {
 	unsigned char hflip;
 	unsigned char vflip;
-};
-
-struct sensor_temp {
-	int temp;
 };
 
 struct isp_table_reg_map {
@@ -692,16 +787,29 @@ struct actuator_para {
 };
 
 struct flash_para {
-	unsigned int mode; //enum v4l2_flash_led_mode mode;
+	enum v4l2_flash_led_mode mode;
 };
 
 struct msc_para {
 	unsigned char data[4096];
 };
 
+struct ir_switch {
+	int ir_on;
+	int ir_flash_on;
+	int ir_hold;
+};
+
+/* VIN ioctl */
+enum set_bit_width {
+	BX_TO_CLOSE = 0,
+	B10_TO_B8 = 1,
+	B8_TO_B10 = 2,
+};
+
 enum vi_dma_stitch_mode_t {
 	DMA_STITCH_NONE = 0,
-	DMA_STITCH_2IN1_LINNER,
+	DMA_STITCH_2IN1_LINEAR,
 	DMA_STITCH_HORIZONTAL,
 	DMA_STITCH_VERTICAL,
 	DMA_STITCH_MODE_MAX,
@@ -719,6 +827,16 @@ struct  dma_merge_scaler_cfg{
 	unsigned char scaler_en;
 	struct v4l2_rect sensorA_scaler_cfg;
 	struct v4l2_rect sensorB_scaler_cfg;
+};
+
+enum sensor_mode_t {
+	SENSOR_MULTI_FRAME = 0,
+	SENSOR_ONE_FRAME,
+};
+
+struct sensor_lowpw_cfg {
+	char lowpw_en;
+	enum sensor_mode_t frame_mode;
 };
 
 /*
@@ -739,6 +857,8 @@ struct  dma_merge_scaler_cfg{
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 65, struct actuator_para)
 #define VIDIOC_VIN_FLASH_EN \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 66, struct flash_para)
+#define VIDIOC_VIN_SET_IR \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 67, struct ir_switch)
 
 #define VIDIOC_VIN_ISP_LOAD_REG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 70, struct isp_table_reg_map)
@@ -769,22 +889,122 @@ struct  dma_merge_scaler_cfg{
 #define VIDIOC_VIN_SET_LDCI_MODE \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 83, unsigned int)
 
-/* VIN ioctl */
-enum set_bit_width {
-	BX_TO_CLOSE = 0,
-	B10_TO_B8 = 1,
-	B8_TO_B10 = 2,
-};
-
-#define VIDIOC_VIN_SET_INPUT_BIT_WIDTH_START \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 100, enum set_bit_width)
-#define VIDIOC_VIN_SET_INPUT_BIT_WIDTH_STOP \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 101, enum set_bit_width)
 #define VIDIOC_VIN_SET_DMA_OVERLAY \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 102, struct dma_overlay_para)
 #define VIDIOC_VIN_SET_SCALER_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 103, struct v4l2_rect)
 #define VIDIOC_VIN_SET_SCALER_RESOLUTION \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 104, struct dma_merge_scaler_cfg)
-#endif /*_SUNXI_CAMERA_H_*/
+#define VIDIOC_VIN_LOWPW_EN \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 105, struct sensor_lowpw_cfg)
+#define VIDIOC_VIN_GET_MIPI_CLK_DLY \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 106, unsigned int)
+#define VIDIOC_VIN_SET_MIPI_CLK_DLY \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 107, unsigned int)
+#define VIDIOC_VIN_GET_MIPI_CLK_ERROR \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 108, unsigned int)
 
+#define VIDIOC_VIN_SET_BUFFER_MODE \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 109, unsigned char)
+
+enum tdm_isp_mode {
+	TDM_NORMAL = 0,
+	TDM_SOFTWARE = 1,
+	TDM_AIISP = 2,
+};
+
+enum aiisp_switch_mode {
+	AIISP_SWITCH_OFF = 0,
+	AIISP_SWITCH_ON = 1,
+};
+
+enum aiisp_offset_mode {
+	AIISP_OFFSET0 = 0,
+	AIISP_OFFSET1,
+	AIISP_OFFSET2,
+	AIISP_OFFSET3,
+};
+
+enum aiisp_select_mode {
+	AIISP_MODE0 = 0,
+	AIISP_MODE1,
+	AIISP_MODE2,
+	AIISP_MODE3,
+};
+
+struct tdm_aiisp_cfg {
+	enum tdm_isp_mode tdm_isp_mode;
+	enum aiisp_switch_mode aiisp_switch;
+	enum aiisp_offset_mode aiisp_offset;
+	enum aiisp_select_mode aiisp_mode;
+};
+
+struct tdm_aiisp_addr {
+	unsigned char buf_id;
+	unsigned int waddr;
+	unsigned int raddr;
+};
+
+struct tdm_aiisp_inform {
+	unsigned char rx_id;
+	unsigned int line_stride;
+	unsigned int width;
+	unsigned int height;
+
+	unsigned int w_offset;
+	unsigned int h_offset;
+
+	unsigned char buf_cnt;
+	struct tdm_aiisp_addr aiisp_addr[3];
+};
+
+enum aiisp_switch_dir {
+	AIISP_SWITCH_NONE,
+	AIISP_TO_NORISP,
+	NORISP_TO_AIISP,
+};
+
+struct isp_ocic_cfg {
+	unsigned char isp_ocic_en;
+	unsigned char interval;
+};
+
+enum isp_mcic_select {
+	ISP_MCIC_NONE_SEL = 0,
+	ISP_MCIC_ISP0_SEL = 1 << 0,
+	ISP_MCIC_ISP1_SEL = 1 << 1,
+	ISP_MCIC_ISP2_SEL = 1 << 2,
+	ISP_MCIC_ISP3_SEL = 1 << 3,
+};
+
+struct isp_mcic_ch_cfg {
+	unsigned char isp_mcic_en;
+	unsigned char isp_mcic_save_en;
+	unsigned char isp_mcic_load_en;
+	unsigned char isp_mcic_sel;
+};
+
+struct isp_mcic_cfg {
+	struct isp_mcic_ch_cfg ch_cfg[2];
+};
+
+#define VIDIOC_VIN_SET_TDMTIME_EMBED \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 120, unsigned int)
+#define VIDIOC_VIN_SET_ISPFE_EMBED \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 121, unsigned int)
+#define VIDIOC_VIN_SET_VIPP_CASCADE \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 122, unsigned int)
+#define VIDIOC_VIN_SET_AIISP_MODE \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 123, struct tdm_aiisp_cfg)
+#define VIDIOC_VIN_GET_AIISP_INFORM \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 124, struct tdm_aiisp_inform)
+#define VIDIOC_VIN_AIISP_SWITCH \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 125, enum aiisp_switch_dir)
+#define VIDIOC_VIN_SET_ISP_OCIC \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 126, struct isp_ocic_cfg)
+#define VIDIOC_VIN_SET_ISP_MCIC \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 127, struct isp_mcic_cfg)
+#define VIDIOC_VIN_SET_VBV_SHARE_YUV \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 128, unsigned int)
+
+#endif /* _SUNXI_CAMERA_H_ */

@@ -713,8 +713,14 @@ int start_video(capture_params *cap_pa, capture_format *cap_fmt)
 	cap_pa->priv_cap.vi_fmt.index = cap_fmt->index;
 	cap_pa->priv_cap.vi_fmt.pixel_num = MIPI_ONE_PIXEL;
 	cap_pa->priv_cap.vi_fmt.tdm_speed_down_en = 0;
-	cap_pa->priv_cap.vi_fmt.large_dma_merge_en = cap_fmt->framecount >> 16;
-	cap_pa->priv_cap.vi_fmt.ptn_en = cap_fmt->framecount & 0xf;
+	cap_pa->priv_cap.vi_fmt.large_dma_merge_en = cap_fmt->stitch_mode;
+	cap_pa->priv_cap.vi_fmt.ptn_en = cap_fmt->ptn_en;
+	cap_pa->priv_cap.vi_fmt.tdmtime_embed_en = 0;
+#if EMBED_DATA_MODE
+	cap_pa->priv_cap.vi_fmt.ispfeinfo_embed_en = 1;
+#else
+	cap_pa->priv_cap.vi_fmt.ispfeinfo_embed_en = 0;
+#endif
 
 	ret = set_video_ptn(g_media_dev, cap_fmt->channel, &cap_pa->priv_cap.vi_fmt);
 	if (ret) {
@@ -777,8 +783,7 @@ start_video_get_fmt:
 
 	if (fmt_changed) {
 		msleep(1000);
-		int isp_id = 0;
-		ret = select_isp(isp_id, 1);//PC Tools input isp_id
+		ret = select_isp(cap_fmt->isp, 1);//PC Tools input isp_id
 		if (ret) {
 			LOG("%s: failed to select isp %d\n", __FUNCTION__, cap_fmt->channel);
 		}
@@ -947,6 +952,12 @@ int set_sensor_input(const sensor_input *sensor_in)
 		cap_handle->priv_cap.vi_fmt.tdm_speed_down_en = 0;
 		cap_handle->priv_cap.vi_fmt.large_dma_merge_en = sensor_in->stitch_mode;
 		cap_handle->priv_cap.vi_fmt.ptn_en = sensor_in->ptn_en;
+		cap_handle->priv_cap.vi_fmt.tdmtime_embed_en = 0;
+		#if EMBED_DATA_MODE
+				cap_handle->priv_cap.vi_fmt.ispfeinfo_embed_en = 1;
+		#else
+				cap_handle->priv_cap.vi_fmt.ispfeinfo_embed_en = 0;
+		#endif
 
 //		if (cap_handle->priv_cap.vich) {
 //			LOG("ldci video from awtuningapp, please set 160*90\n");
@@ -1067,6 +1078,10 @@ int get_capture_buffer(capture_format *cap_fmt, sock_packet *comm_packet, int so
 						buffer += cap_handle->priv_cap.vi_frame_info.u32Stride[ret];
 						cap_fmt->length += cap_handle->priv_cap.vi_frame_info.u32Stride[ret];
 					}
+					if (cap_fmt->stitch_mode)
+						cap_fmt->length -= EMBED_DATA_SIZE_2IN1;
+					else
+						cap_fmt->length -= EMBED_DATA_SIZE;
 					if((cap_fmt->format != V4L2_PIX_FMT_SBGGR8) && (cap_fmt->format != V4L2_PIX_FMT_SGBRG8) &&
 						(cap_fmt->format != V4L2_PIX_FMT_SGRBG8) && (cap_fmt->format != V4L2_PIX_FMT_SRGGB8) &&
 						(cap_fmt->format != V4L2_PIX_FMT_SBGGR10) && (cap_fmt->format != V4L2_PIX_FMT_SGBRG10) &&
@@ -1411,13 +1426,9 @@ int get_capture_vencode_buffer(capture_format *cap_fmt, encode_param_t *encode_p
 				} else {
 					inputBuffer->pAddrVirY = (unsigned char*)cap_handle->priv_cap.vi_frame_info.pVirAddr[0];
 					inputBuffer->pAddrVirC = (unsigned char*)cap_handle->priv_cap.vi_frame_info.pVirAddr[1];
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 					inputBuffer->pAddrPhyY = (unsigned char*)cap_handle->priv_cap.vi_frame_info.u32PhyAddr[0];
 					inputBuffer->pAddrPhyC = (unsigned char*)cap_handle->priv_cap.vi_frame_info.u32PhyAddr[1];
-#else
-					inputBuffer->pAddrPhyY = (unsigned long)cap_handle->priv_cap.vi_frame_info.u32PhyAddr[0];
-					inputBuffer->pAddrPhyC = (unsigned long)cap_handle->priv_cap.vi_frame_info.u32PhyAddr[1];
-#endif
+
 					ret = EncoderStart(encode_param, inputBuffer, outputBuffer, VENCODE_CMD_STREAM);
 					if (ret) {
 						LOG("%s: detect video encode error!!@%d\n", __FUNCTION__, __LINE__);
@@ -1460,13 +1471,9 @@ int get_capture_vencode_buffer(capture_format *cap_fmt, encode_param_t *encode_p
 				} else {
 					inputBuffer->pAddrVirY = (unsigned char*)cap_handle->priv_cap.vi_frame_info.pVirAddr[0];
 					inputBuffer->pAddrVirC = (unsigned char*)cap_handle->priv_cap.vi_frame_info.pVirAddr[1];
-#if (ISP_VERSION == 600 || ISP_VERSION == 603)
 					inputBuffer->pAddrPhyY = (unsigned char*)cap_handle->priv_cap.vi_frame_info.u32PhyAddr[0];
 					inputBuffer->pAddrPhyC = (unsigned char*)cap_handle->priv_cap.vi_frame_info.u32PhyAddr[1];
-#else
-					inputBuffer->pAddrPhyY = (unsigned long)cap_handle->priv_cap.vi_frame_info.u32PhyAddr[0];
-					inputBuffer->pAddrPhyC = (unsigned long)cap_handle->priv_cap.vi_frame_info.u32PhyAddr[1];
-#endif
+
 					ret = EncoderStart(encode_param, inputBuffer, outputBuffer, VENCODE_CMD_STREAM);
 					if (ret) {
 						LOG("%s: detect video encode error!!@%d\n", __FUNCTION__, __LINE__);
@@ -1477,7 +1484,18 @@ int get_capture_vencode_buffer(capture_format *cap_fmt, encode_param_t *encode_p
 						} else {
 							cap_fmt->length = cap_fmt->width * ((cap_fmt->height / 16) + 1) * 16 * 3 / 2;
 						}
-						EncoderGetWbYuv(encode_param, buffer, cap_fmt->length);
+
+						unsigned char *thumb_data_ptr = NULL;
+						unsigned int thumb_data_size = 0;
+						int result = EncoderGetWbYuv(encode_param, &thumb_data_ptr, &thumb_data_size);
+						if (result == 0 && thumb_data_ptr && thumb_data_size > 0) {
+							memcpy(cap_fmt->buffer, thumb_data_ptr, thumb_data_size);
+							cap_fmt->length = thumb_data_size;
+						} else {
+							cap_fmt->length = 0;
+							LOG("Failed to get thumbnail data: error %d\n", result);
+						}
+
 						if(cap_fmt->height % 16) { // height ALIGN
 							uptr = cap_fmt->buffer + (cap_fmt->width * cap_fmt->height);
 							for(i = 0; i < cap_fmt->width * cap_fmt->height / 2; i++) {
@@ -1544,6 +1562,13 @@ int get_capture_buffer_transfer(capture_format *cap_fmt)
 							cap_handle->priv_cap.vi_frame_info.u32Stride[ret]);
 						buffer += cap_handle->priv_cap.vi_frame_info.u32Stride[ret];
 						cap_fmt->length += cap_handle->priv_cap.vi_frame_info.u32Stride[ret];
+					}
+					if (cap_fmt->stitch_mode) {
+						buffer -= EMBED_DATA_SIZE_2IN1;
+						cap_fmt->length -= EMBED_DATA_SIZE_2IN1;
+					} else {
+						buffer -= EMBED_DATA_SIZE;
+						cap_fmt->length -= EMBED_DATA_SIZE;
 					}
 					if((cap_fmt->format != V4L2_PIX_FMT_SBGGR8) && (cap_fmt->format != V4L2_PIX_FMT_SGBRG8) &&
 						(cap_fmt->format != V4L2_PIX_FMT_SGRBG8) && (cap_fmt->format != V4L2_PIX_FMT_SRGGB8) &&

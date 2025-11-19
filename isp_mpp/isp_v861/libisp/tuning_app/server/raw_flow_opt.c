@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "linux/videodev2.h"
+#include <linux/videodev2.h>
 
 #include "../log_handle.h"
 

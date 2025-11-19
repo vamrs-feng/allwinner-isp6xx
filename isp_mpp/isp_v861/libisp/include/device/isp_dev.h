@@ -68,7 +68,8 @@ struct hw_isp_media_dev {
 	struct isp_video_device *video_dev[HW_VIDEO_DEVICE_NUM];
 	pthread_t isp_tid[HW_ISP_DEVICE_NUM];
 	unsigned int isp_use_cnt[HW_ISP_DEVICE_NUM];
-	int isp_sync_mode;
+	unsigned char isp_sync_count[HW_ISP_DEVICE_NUM];
+	unsigned int isp_sync_mode[HW_ISP_DEVICE_NUM];
 };
 
 enum hw_isp_event_type {

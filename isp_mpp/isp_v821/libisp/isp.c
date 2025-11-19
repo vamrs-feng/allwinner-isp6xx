@@ -4064,8 +4064,35 @@ HW_S32 isp_get_awb_gain_ir(int dev_id, HW_S32 *rgain_ir, HW_S32 *bgain_ir)
 	if (isp_gen == NULL)
 		return -1;
 
-	*rgain_ir = isp_gen->rgain_ir;
-	*bgain_ir = isp_gen->bgain_ir;
+	isp_get_software_ir_param(isp_gen);
+
+	*rgain_ir = isp_gen->software_ir_info.rgain_ir;
+	*bgain_ir = isp_gen->software_ir_info.bgain_ir;
+
+	return 0;
+}
+
+HW_S32 isp_get_awb_ir_win_cnt(int dev_id, HW_S32 *irlight_win_cnt, HW_S32 *normal_win_cnt)
+{
+	struct hw_isp_device *isp = NULL;
+
+	if (dev_id >= HW_ISP_DEVICE_NUM)
+		return -1;
+
+	isp = media_params.isp_dev[dev_id];
+	if (!isp) {
+		ISP_ERR("isp%d device is NULL!\n", dev_id);
+		return -1;
+	}
+
+	struct isp_lib_context *isp_gen = isp_dev_get_ctx(isp);
+	if (isp_gen == NULL)
+		return -1;
+
+	isp_get_software_ir_param(isp_gen);
+
+	*irlight_win_cnt = isp_gen->software_ir_info.irlight_win_cnt;
+	*normal_win_cnt = isp_gen->software_ir_info.normal_win_cnt;
 
 	return 0;
 }

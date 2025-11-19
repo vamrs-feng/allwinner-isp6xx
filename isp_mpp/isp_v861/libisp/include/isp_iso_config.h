@@ -52,6 +52,7 @@ typedef struct isp_lib_iso_param {
 	HW_U8 shading_adjust;
 	HW_U8 encoder_adjust;
 	HW_U8 awb_adjust;
+	HW_U8 nrp_adjust;
 
 	struct isp_lib_context *isp_gen;
 	iso_test_config_t test_cfg;
@@ -62,6 +63,8 @@ typedef struct isp_iso_result {
 	HW_U32 lum_idx;
 	HW_S16 npu_face_nr;
 	HW_S16 shading_comp;
+	HW_U16 d2d_block_nr_rt;
+	HW_U16 d3d_block_nr_rt;
 #ifdef USE_ENCPP
 	struct encoder_3dnr_config encoder_3dnr_cfg;
 	struct encoder_2dnr_config encoder_2dnr_cfg;

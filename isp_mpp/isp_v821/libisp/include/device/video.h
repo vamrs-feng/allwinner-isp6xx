@@ -90,6 +90,9 @@ struct video_fmt {
 	enum dma_buffer_num dma_buf_num;
 	enum mipi_pix_num pixel_num;
 	unsigned char tdm_speed_down_en;
+	unsigned char tdm_tx_valid_num;
+	unsigned char tdm_tx_invalid_num;
+	unsigned char tdm_tx_valid_num_offset;
 	unsigned char large_dma_merge_en;
 	unsigned char video_selection_en;
 	struct video_selection_rect rect;
@@ -221,4 +224,6 @@ int video_tdm_raw_npu_mode_disable(struct isp_video_device *video, unsigned char
 int video_set_input_bit_width_start(struct isp_video_device *video, enum set_bit_width bitwidth);
 int video_set_input_bit_width_stop(struct isp_video_device *video, enum set_bit_width bitwidth);
 int video_set_dma_overlay(struct isp_video_device *video, struct dma_overlay_para *dma_overlay_ctx);
+int video_set_vbv_share_yuv(struct isp_video_device *video, unsigned int enable);
+
 #endif /* __VIDEO_H_ */

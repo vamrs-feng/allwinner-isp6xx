@@ -260,7 +260,6 @@ static int save_ini_tuning_file(struct hw_isp_device *isp, char *path, struct is
 static int load_ini_tuning_file(struct hw_isp_device *isp, char *path, struct isp_param_config *param, char *sensor_name, int w, int h, int fps, int wdr)
 {
 	int i, ret = 0;
-#if 0
 	char isp_cfg_path[128], buf[50], rdval = 1;
 	FILE *fd = NULL;
 	struct isp_log_cfg log_cfg;
@@ -412,7 +411,8 @@ static int load_ini_tuning_file(struct hw_isp_device *isp, char *path, struct is
 			}
 
 			log_cfg.pltm_log.pltm_auto_stren = ctx->pltm_entity_ctx.pltm_result.pltm_auto_stren;
-			log_cfg.pltm_log.pltm_sharp_ss_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_sharp_ss_compensation;
+			log_cfg.pltm_log.pltm_sharp_hs_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_sharp_hs_compensation;
+			log_cfg.pltm_log.pltm_sharp_ms_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_sharp_ms_compensation;
 			log_cfg.pltm_log.pltm_sharp_ls_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_sharp_ls_compensation;
 			log_cfg.pltm_log.pltm_d2d_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_d2d_compensation;
 			log_cfg.pltm_log.pltm_d3d_compensation = ctx->pltm_entity_ctx.pltm_result.pltm_d3d_compensation;
@@ -473,6 +473,12 @@ static int load_ini_tuning_file(struct hw_isp_device *isp, char *path, struct is
 			fclose(fd);
 			fd = NULL;
 
+			sprintf(isp_cfg_path, "%sisp%d_%d_%d_%d_%d/3a_stat/mot_tex", path, isp->id, w, h, fps, wdr);
+			fd = fopen(isp_cfg_path, "w+");
+			fwrite(&ctx->stats_ctx.stats.mot_tex_stats, sizeof(struct isp_mot_tex_stats_s), 1, fd);
+			fclose(fd);
+			fd = NULL;
+
 			sprintf(isp_cfg_path, "%sisp%d_%d_%d_%d_%d/3a_stat/flag", path, isp->id, w, h, fps, wdr);
 			fd = fopen(isp_cfg_path, "w+");
 			if (fd) {
@@ -487,7 +493,6 @@ static int load_ini_tuning_file(struct hw_isp_device *isp, char *path, struct is
 		ISP_ERR("isp%d sensor cfg name is invalid\n", isp->id);
 		return -1;
 	}
-#endif
 	return ret;
 }
 
@@ -530,7 +535,7 @@ int isp_sensor_otp_init(struct hw_isp_device *isp)
 	if (ctx == NULL)
 		return -1;
 
-	if (ctx->stitch_mode == STITCH_2IN1_LINNER && ctx->isp_id == 0) {
+	if (ctx->stitch_mode == STITCH_2IN1_LINEAR && ctx->isp_id == 0) {
 		ctx->sensor_otp.otp_enable = 0;
 		return 0;
 	}
@@ -556,7 +561,7 @@ int isp_sensor_otp_init(struct hw_isp_device *isp)
 	} else {
 		ctx->sensor_otp.otp_enable = 1;
 		ISP_PRINT("ISP%d OTP Enable\n", ctx->isp_id);
-		if (ctx->stitch_mode == STITCH_2IN1_LINNER) {
+		if (ctx->stitch_mode == STITCH_2IN1_LINEAR) {
 			ctx->sensor_otp.pmsc_table = &ctx->sensor_otp.otp_info->otp_buf[0];
 			ctx->sensor_otp.pwb_table = &ctx->sensor_otp.otp_info->otp_buf[OTP_MSC_SIZE * 2];
 			ctx->sensor_otp.paf_table = &ctx->sensor_otp.otp_info->otp_buf[OTP_MSC_SIZE * 2 + OTP_WB_SIZE];
@@ -1078,6 +1083,7 @@ HW_S32 isp_tuning_get_cfg_run(struct hw_isp_device *isp, HW_U8 group_id, HW_U32 
 		{
 			struct isp_awb_favor_cfg *isp_awb_favor = (struct isp_awb_favor_cfg *)data_ptr;
 			isp_awb_favor->local_wb_coef = params->isp_3a_settings.local_wb_coef;
+			isp_awb_favor->complex_light_sat_coef = params->isp_3a_settings.complex_light_sat_coef;
 			isp_awb_favor->awb_stat_mode = params->isp_3a_settings.awb_stat_mode;
 			isp_awb_favor->awb_reserve_0 = params->isp_3a_settings.awb_reserve_0;
 			isp_awb_favor->awb_reserve_1 = params->isp_3a_settings.awb_reserve_1;
@@ -1395,9 +1401,14 @@ HW_S32 isp_tuning_get_cfg_run(struct hw_isp_device *isp, HW_U8 group_id, HW_U32 
 			isp_tuning_fpn_comm->pfpn_en = params->isp_tunning_settings.fpn_pfpn_en;
 			isp_tuning_fpn_comm->cfpn_en = params->isp_tunning_settings.fpn_cfpn_en;
 			isp_tuning_fpn_comm->pfpn_cluster_size = params->isp_tunning_settings.fpn_pfpn_cluster_size;
-			memcpy(isp_tuning_fpn_comm->pfpn_phase_lut, params->isp_tunning_settings.fpn_pfpn_phase_lut, sizeof(isp_tuning_fpn_comm->pfpn_phase_lut));
-			memcpy(isp_tuning_fpn_comm->pfpn_period_lut, params->isp_tunning_settings.fpn_pfpn_period_lut, sizeof(isp_tuning_fpn_comm->pfpn_period_lut));
-			memcpy(isp_tuning_fpn_comm->pfpn_offset_lut, params->isp_tunning_settings.fpn_pfpn_offset_lut, sizeof(isp_tuning_fpn_comm->pfpn_offset_lut));
+			int i = 0;
+			for (i = 0; i < ISP_PFPN_TBL_SIZE; i++) {
+				isp_tuning_fpn_comm->pfpn_phase_lut[i] = params->isp_tunning_settings.fpn_pfpn_phase_lut[i];
+				isp_tuning_fpn_comm->pfpn_period_lut[i] = params->isp_tunning_settings.fpn_pfpn_period_lut[i];
+				isp_tuning_fpn_comm->pfpn_offset_lut[i] = params->isp_tunning_settings.fpn_pfpn_offset_lut[i];
+			}
+			isp_tuning_fpn_comm->cfpn_lw_th = params->isp_tunning_settings.fpn_cfpn_lw_th;
+			isp_tuning_fpn_comm->cfpn_hi_th = params->isp_tunning_settings.fpn_cfpn_hi_th;
 
 			/* offset */
 			data_ptr += sizeof(struct isp_tuning_fpn_comm_cfg);
@@ -1906,8 +1917,6 @@ HW_S32 isp_tuning_get_cfg_run(struct hw_isp_device *isp, HW_U8 group_id, HW_U32 
 				        sizeof(isp_dynamic_encpp_sharp->tuning_ndir_ms_cfg[i].value));
 				memcpy(isp_dynamic_encpp_sharp->tuning_comm_cfg[i].value, &params->isp_iso_settings.isp_dynamic_cfg[i].encpp_sharp_cfg[ENCPP_SHARP_NDIR_HS_MIX_LW_CLIP],
 				        sizeof(isp_dynamic_encpp_sharp->tuning_comm_cfg[i].value));
-				memcpy(isp_dynamic_encpp_sharp->tuning_denoise_cfg[i].value, &params->isp_iso_settings.isp_dynamic_cfg[i].encpp_sharp_cfg[ENCPP_SHARP_CNR_RATIO],
-						sizeof(isp_dynamic_encpp_sharp->tuning_denoise_cfg[i].value));
 			}
 
 			/* offset */
@@ -1990,7 +1999,33 @@ HW_S32 isp_tuning_get_cfg_run(struct hw_isp_device *isp, HW_U8 group_id, HW_U32 
 			data_ptr += sizeof(struct isp_dynamic_encpp_ldci_cfg);
 			ret += sizeof(struct isp_dynamic_encpp_ldci_cfg);
 		}
+		if (cfg_ids & HW_ISP_CFG_DYNAMIC_ENCPP_TOP) /* isp_dynamic_encpp_top */
+		{
+			struct isp_dynamic_encpp_top_cfg *isp_dynamic_encpp_top = (struct isp_dynamic_encpp_top_cfg *)data_ptr;
+			int i = 0;
+			isp_dynamic_encpp_top->trigger = params->isp_iso_settings.triger.encpp_top_triger;
+			for (i = 0; i < ISP_DYNAMIC_GROUP_COUNT; i++)
+				memcpy(isp_dynamic_encpp_top->tuning_cfg[i].value, params->isp_iso_settings.isp_dynamic_cfg[i].encpp_top_cfg,
+					sizeof(isp_dynamic_encpp_top->tuning_cfg[i].value));
+
+			/* offset */
+			data_ptr += sizeof(struct isp_dynamic_encpp_top_cfg);
+			ret += sizeof(struct isp_dynamic_encpp_top_cfg);
+		}
 #endif
+		if (cfg_ids & HW_ISP_CFG_DYNAMIC_NRP) /* isp_dynamic_nrp */
+		{
+			struct isp_dynamic_nrp_cfg *isp_dynamic_nrp = (struct isp_dynamic_nrp_cfg *)data_ptr;
+			int i = 0;
+			isp_dynamic_nrp->trigger = params->isp_iso_settings.triger.nrp_triger;
+			for (i = 0; i < ISP_DYNAMIC_GROUP_COUNT; i++)
+				memcpy(isp_dynamic_nrp->tuning_cfg[i].value, params->isp_iso_settings.isp_dynamic_cfg[i].nrp_cfg,
+					sizeof(isp_dynamic_nrp->tuning_cfg[i].value));
+
+			/* offset */
+			data_ptr += sizeof(struct isp_dynamic_nrp_cfg);
+			ret += sizeof(struct isp_dynamic_nrp_cfg);
+		}
 		break;
 	case HW_ISP_CFG_TUNING_ENCODER: /* tuning encoder */
 		if (cfg_ids & HW_VENCODER_CFG_TUNING_BASE)
@@ -2597,6 +2632,7 @@ HW_S32 isp_tuning_set_cfg_run(struct hw_isp_device *isp, HW_U8 group_id, HW_U32 
 		{
 			struct isp_awb_favor_cfg *isp_awb_favor = (struct isp_awb_favor_cfg *)data_ptr;
 			params->isp_3a_settings.local_wb_coef = isp_awb_favor->local_wb_coef;
+			params->isp_3a_settings.complex_light_sat_coef = isp_awb_favor->complex_light_sat_coef;
 			params->isp_3a_settings.awb_stat_mode = isp_awb_favor->awb_stat_mode;
 			params->isp_3a_settings.awb_reserve_0 = isp_awb_favor->awb_reserve_0;
 			params->isp_3a_settings.awb_reserve_1 = isp_awb_favor->awb_reserve_1;
@@ -2914,9 +2950,14 @@ HW_S32 isp_tuning_set_cfg_run(struct hw_isp_device *isp, HW_U8 group_id, HW_U32 
 			params->isp_tunning_settings.fpn_pfpn_en = isp_tuning_fpn_comm->pfpn_en;
 			params->isp_tunning_settings.fpn_cfpn_en = isp_tuning_fpn_comm->cfpn_en;
 			params->isp_tunning_settings.fpn_pfpn_cluster_size = isp_tuning_fpn_comm->pfpn_cluster_size;
-			memcpy(params->isp_tunning_settings.fpn_pfpn_phase_lut, isp_tuning_fpn_comm->pfpn_phase_lut, sizeof(isp_tuning_fpn_comm->pfpn_phase_lut));
-			memcpy(params->isp_tunning_settings.fpn_pfpn_period_lut, isp_tuning_fpn_comm->pfpn_period_lut, sizeof(isp_tuning_fpn_comm->pfpn_period_lut));
-			memcpy(params->isp_tunning_settings.fpn_pfpn_offset_lut, isp_tuning_fpn_comm->pfpn_offset_lut, sizeof(isp_tuning_fpn_comm->pfpn_offset_lut));
+			int i = 0;
+			for (i = 0; i < ISP_PFPN_TBL_SIZE; i++) {
+				params->isp_tunning_settings.fpn_pfpn_phase_lut[i] = isp_tuning_fpn_comm->pfpn_phase_lut[i];
+				params->isp_tunning_settings.fpn_pfpn_period_lut[i] = isp_tuning_fpn_comm->pfpn_period_lut[i];
+				params->isp_tunning_settings.fpn_pfpn_offset_lut[i] = isp_tuning_fpn_comm->pfpn_offset_lut[i];
+			}
+			params->isp_tunning_settings.fpn_cfpn_lw_th = isp_tuning_fpn_comm->cfpn_lw_th;
+			params->isp_tunning_settings.fpn_cfpn_hi_th = isp_tuning_fpn_comm->cfpn_hi_th;
 
 			/* offset */
 			data_ptr += sizeof(struct isp_tuning_fpn_comm_cfg);
@@ -3420,8 +3461,6 @@ HW_S32 isp_tuning_set_cfg_run(struct hw_isp_device *isp, HW_U8 group_id, HW_U32 
 				        sizeof(isp_dynamic_encpp_sharp->tuning_ndir_ms_cfg[i].value));
 				memcpy(&params->isp_iso_settings.isp_dynamic_cfg[i].encpp_sharp_cfg[ENCPP_SHARP_NDIR_HS_MIX_LW_CLIP], isp_dynamic_encpp_sharp->tuning_comm_cfg[i].value,
 				        sizeof(isp_dynamic_encpp_sharp->tuning_comm_cfg[i].value));
-				memcpy(&params->isp_iso_settings.isp_dynamic_cfg[i].encpp_sharp_cfg[ENCPP_SHARP_CNR_RATIO], isp_dynamic_encpp_sharp->tuning_denoise_cfg[i].value,
-						sizeof(isp_dynamic_encpp_sharp->tuning_denoise_cfg[i].value));
 			}
 
 			/* offset */
@@ -3504,7 +3543,33 @@ HW_S32 isp_tuning_set_cfg_run(struct hw_isp_device *isp, HW_U8 group_id, HW_U32 
 			data_ptr += sizeof(struct isp_dynamic_encpp_ldci_cfg);
 			ret += sizeof(struct isp_dynamic_encpp_ldci_cfg);
 		}
+		if (cfg_ids & HW_ISP_CFG_DYNAMIC_ENCPP_TOP) /* isp_dynamic_encpp_top */
+		{
+			struct isp_dynamic_encpp_top_cfg *isp_dynamic_encpp_top = (struct isp_dynamic_encpp_top_cfg *)data_ptr;
+			int i = 0;
+			params->isp_iso_settings.triger.encpp_top_triger = (enum isp_triger_type)isp_dynamic_encpp_top->trigger;
+			for (i = 0; i < ISP_DYNAMIC_GROUP_COUNT; i++)
+				memcpy(params->isp_iso_settings.isp_dynamic_cfg[i].encpp_top_cfg, isp_dynamic_encpp_top->tuning_cfg[i].value,
+					sizeof(isp_dynamic_encpp_top->tuning_cfg[i].value));
+
+			/* offset */
+			data_ptr += sizeof(struct isp_dynamic_encpp_top_cfg);
+			ret += sizeof(struct isp_dynamic_encpp_top_cfg);
+		}
 #endif
+		if (cfg_ids & HW_ISP_CFG_DYNAMIC_NRP) /* isp_dynamic_nrp */
+		{
+			struct isp_dynamic_nrp_cfg *isp_dynamic_nrp = (struct isp_dynamic_nrp_cfg *)data_ptr;
+			int i = 0;
+			params->isp_iso_settings.triger.nrp_triger = (enum isp_triger_type)isp_dynamic_nrp->trigger;
+			for (i = 0; i < ISP_DYNAMIC_GROUP_COUNT; i++)
+				memcpy(params->isp_iso_settings.isp_dynamic_cfg[i].nrp_cfg, isp_dynamic_nrp->tuning_cfg[i].value,
+					sizeof(isp_dynamic_nrp->tuning_cfg[i].value));
+
+			/* offset */
+			data_ptr += sizeof(struct isp_dynamic_nrp_cfg);
+			ret += sizeof(struct isp_dynamic_nrp_cfg);
+		}
 		break;
 	case HW_ISP_CFG_TUNING_ENCODER: /* tuning encoder */
 		if (cfg_ids & HW_VENCODER_CFG_TUNING_BASE)

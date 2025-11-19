@@ -77,7 +77,7 @@ void convert_tuning_cfg_to_network(HW_U8 group_id, HW_U32 cfg_ids, unsigned char
 /*
  * convert 3a statistics from local to network
  */
-void hton_3a_info(void *stat_info, int type);
+//void hton_3a_info(void *stat_info, int type);
 /*
  * convert 3a statistics from network to local
  */
@@ -85,6 +85,9 @@ void hton_3a_info(void *stat_info, int type);
 /*
  * print 3a statistics
  */
+
+void get_statistics_tbl_size(int type, int *tbl_w, int *tbl_h);
+
 void output_3a_info(const void *stat_info, int type);
 
 HW_S32 ini_tuning_get_cfg(HW_U8 group_id, HW_U32 cfg_ids, void *cfg_data);

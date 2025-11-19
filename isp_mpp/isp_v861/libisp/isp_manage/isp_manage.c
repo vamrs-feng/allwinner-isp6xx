@@ -239,7 +239,7 @@ void __isp_iso_run(struct isp_lib_context *isp_gen)
 {
 	isp_iso_entity_context_t *isp_iso_cxt = &isp_gen->iso_entity_ctx;
 
-	if (isp_gen->stitch_mode == STITCH_2IN1_LINNER && isp_gen->isp_id == 0) {
+	if (isp_gen->stitch_mode == STITCH_2IN1_LINEAR && isp_gen->isp_id == 0) {
 		return;
 	}
 
@@ -463,23 +463,6 @@ void __isp_awb_run(struct isp_lib_context *isp_gen)
 		isp_gen->module_cfg.wb_gain_cfg.wb_gain.gr_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.gr_gain / 256.0, 1/1.3) * 256.0);
 		isp_gen->module_cfg.wb_gain_cfg.wb_gain.gb_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.gb_gain / 256.0, 1/1.3) * 256.0);
 		isp_gen->module_cfg.wb_gain_cfg.wb_gain.b_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.b_gain / 256.0, 1/1.3) * 256.0);
-	} else if (isp_gen->ai_isp_en) {
-		if (isp_gen->ai_isp_en == 1) {
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.r_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.r_gain / 256.0, 1/2.2) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.gr_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.gr_gain / 256.0, 1/2.2) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.gb_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.gb_gain / 256.0, 1/2.2) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.b_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.b_gain / 256.0, 1/2.2) * 256.0);
-		} else if (isp_gen->ai_isp_en == 2) {
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.r_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.r_gain / 256.0, 1/1.69) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.gr_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.gr_gain / 256.0, 1/1.69) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.gb_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.gb_gain / 256.0, 1/1.69) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.b_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.b_gain / 256.0, 1/1.69) * 256.0);
-		} else if (isp_gen->ai_isp_en == 3) {
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.r_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.r_gain / 256.0, 1/1.3) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.gr_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.gr_gain / 256.0, 1/1.3) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.gb_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.gb_gain / 256.0, 1/1.3) * 256.0);
-			isp_gen->module_cfg.wb_gain_cfg.wb_gain.b_gain = (HW_U16)(powf((float)isp_awb_cxt->awb_result.wb_gain_output.b_gain / 256.0, 1/1.3) * 256.0);
-		}
 	} else {
 		isp_gen->module_cfg.wb_gain_cfg.wb_gain = isp_awb_cxt->awb_result.wb_gain_output;
 	}
@@ -496,6 +479,22 @@ void __isp_ae_set_params(struct isp_lib_context *isp_gen)
 	isp_gen->ae_entity_ctx.ae_param->ae_sensor_info = isp_gen->sensor_info;
 	isp_gen->ae_entity_ctx.ae_param->ae_target_comp = 0;
 	isp_ae_update_touch_cfg(isp_gen);
+}
+
+static void __isp_fpn_set_params(struct isp_lib_context *isp_gen)
+{
+	struct isp_param_config *param = &isp_gen->isp_ini_cfg;
+	struct isp_module_config *mod_cfg = &isp_gen->module_cfg;
+	int i;
+
+	if (param->isp_tunning_settings.fpn_cfpn_lw_th > param->isp_tunning_settings.fpn_cfpn_hi_th)
+		ISP_ERR("cfpn_lw_th > cfpn_hi_th, please check this value.\n");
+
+	for (i = 0; i < ISP_REG_TBL_LENGTH_17; i++) {
+		mod_cfg->fpn_cfg.fpn_cfpn_coeff_lut[i] = ValueInterp(isp_gen->ae_entity_ctx.ae_result.sensor_set.ev_set_curr.ev_total_gain,
+			param->isp_tunning_settings.fpn_cfpn_lw_th, param->isp_tunning_settings.fpn_cfpn_hi_th,
+			0, param->isp_tunning_settings.fpn_cfpn_coeff_lut[i]);
+	}
 }
 
 #if ISP_AI_SCENE_CONF
@@ -946,14 +945,6 @@ void __isp_pltm_run(struct isp_lib_context *isp_gen)
 	}
 
 	pltm_cfg->strength = result->pltm_auto_stren;
-	if (isp_gen->isp_ini_cfg.isp_tunning_settings.pltm_cfg[ISP_PLTM_HDR_RATIO]) {
-		if (result->pltm_hdr_ratio)
-			pltm_cfg->dcc_lw_ratio = min(255, 2 * (isp_pltm_ctx->pltm_param->pltm_ini.pltm_dynamic_cfg[ISP_PLTM_DYNAMIC_DCC_LW_RT] << 16) / result->pltm_hdr_ratio);
-		else
-			pltm_cfg->dcc_lw_ratio = 255;
-	} else {
-		pltm_cfg->dcc_lw_ratio = isp_pltm_ctx->pltm_param->pltm_ini.pltm_dynamic_cfg[ISP_PLTM_DYNAMIC_DCC_LW_RT];
-	}
 	if (pltm_cfg->dcc_hi_th != pltm_cfg->dcc_lw_th)
 		pltm_cfg->dcc_slp = ((256 - pltm_cfg->dcc_lw_ratio) << 8) / (pltm_cfg->dcc_hi_th - pltm_cfg->dcc_lw_th);
 	else
@@ -1254,7 +1245,7 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 	//after __isp_ctx_cfg_lib
 	struct isp_module_config *mod_cfg = &isp_gen->module_cfg;
 	struct isp_param_config *param = &isp_gen->isp_ini_cfg;
-	int i = 0, j = 0;
+	int i = 0, j = 0, msc_w_count = 0, msc_h_count = 0;
 	//HW_U8 isp_tdnf_k_mg_bk[ISP_REG1_TBL_LENGTH] = {0, 8, 16, 24, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128};
 	//HW_U8 isp_tdnf_r_mg_bk[ISP_REG1_TBL_LENGTH] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 5, 9, 19, 37, 71, 255};
 	HW_U8 isp_tdnf_df_bd_tbl[ISP_TDNF_TBL_SIZE] = {
@@ -1523,7 +1514,7 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 		} else {
 			mod_cfg->mode_cfg.gain_sel = 0;
 			mod_cfg->mode_cfg.wb_sel = 0;
-			mod_cfg->mode_cfg.ccm_sel = 0;
+			mod_cfg->mode_cfg.ccm_sel = 1;
 			mod_cfg->nrp_cfg.gamma_en = 1;
 			mod_cfg->nrp_cfg.inv_gamma_en = 1;
 			if (((!mod_cfg->mode_cfg.gain_sel && (param->isp_test_settings.dig_gain_en || param->isp_test_settings.lsc_en || param->isp_test_settings.msc_en)) ||
@@ -1561,26 +1552,6 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 	mod_cfg->nrp_cfg.cb_hf_rt_hi = param->isp_tunning_settings.nrp_comm_cfg[ISP_NRP_DLE_HF_RT_HI];
 	mod_cfg->nrp_cfg.cr_hf_rt_lw = param->isp_tunning_settings.nrp_comm_cfg[ISP_NRP_DLE_HF_RT_LW];
 	mod_cfg->nrp_cfg.cr_hf_rt_hi = param->isp_tunning_settings.nrp_comm_cfg[ISP_NRP_DLE_HF_RT_HI];
-	mod_cfg->nrp_cfg.cb_mf_clp = param->isp_tunning_settings.nrp_comm_cfg[ISP_NRP_DLE_MF_CLIP];
-	mod_cfg->nrp_cfg.cr_mf_clp = param->isp_tunning_settings.nrp_comm_cfg[ISP_NRP_DLE_MF_CLIP];
-	mod_cfg->nrp_cfg.y_ratio = param->isp_tunning_settings.nrp_comm_cfg[ISP_NRP_DLE_Y_RATIO];
-
-	if (isp_gen->ai_isp_en) {
-		mod_cfg->mode_cfg.gain_sel = 0;
-		mod_cfg->mode_cfg.wb_sel = 0;
-		mod_cfg->mode_cfg.ccm_sel = 2;
-		mod_cfg->nrp_cfg.gamma_en = 0;
-		mod_cfg->nrp_cfg.inv_gamma_en = 0;
-		if (param->isp_test_settings.blc_en) {
-			mod_cfg->nrp_cfg.blc0_en = 1;
-			mod_cfg->nrp_cfg.inv_blc0_en = 1;
-		} else {
-			mod_cfg->nrp_cfg.blc0_en = 0;
-			mod_cfg->nrp_cfg.inv_blc0_en = 0;
-		}
-		mod_cfg->nrp_cfg.blc1_en = 0;
-		mod_cfg->nrp_cfg.inv_blc1_en = 0;
-	}
 
 	//denoise
 	if (isp_gen->sensor_info.width_overlayer)
@@ -1608,11 +1579,6 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 	mod_cfg->bdnf_cfg.wdr_ms_lw_slp = param->isp_tunning_settings.denoise_comm_cfg[ISP_DENOISE_WDR_MS_LW_SLP];
 	mod_cfg->bdnf_cfg.wdr_ms_hi_slp = param->isp_tunning_settings.denoise_comm_cfg[ISP_DENOISE_WDR_MS_HI_SLP];
 	mod_cfg->bdnf_cfg.wdr_ms_max_clp = param->isp_tunning_settings.denoise_comm_cfg[ISP_DENOISE_WDR_MS_MAX_CLIP];
-	memcpy(&mod_cfg->bdnf_cfg.d2d_nr_cbth[0], &isp_gen->isp_ini_cfg.isp_tunning_settings.isp_d2d_nr_cbth[0], ISP_REG_TBL_LENGTH_32 * sizeof(HW_U16));
-	memcpy(&mod_cfg->bdnf_cfg.d2d_nr_crth[0], &isp_gen->isp_ini_cfg.isp_tunning_settings.isp_d2d_nr_crth[0], ISP_REG_TBL_LENGTH_32 * sizeof(HW_U16));
-	memcpy(&mod_cfg->bdnf_cfg.d2d_lp0_nr_ybk[0], &isp_gen->isp_ini_cfg.isp_tunning_settings.isp_d2d_lp0_nr_ybk[0], ISP_REG_TBL_LENGTH_16 * sizeof(HW_U8));
-	memcpy(&mod_cfg->bdnf_cfg.d2d_lp1_nr_ybk[0], &isp_gen->isp_ini_cfg.isp_tunning_settings.isp_d2d_lp1_nr_ybk[0], ISP_REG_TBL_LENGTH_16 * sizeof(HW_U8));
-	memcpy(&mod_cfg->bdnf_cfg.d2d_lp2_nr_ybk[0], &isp_gen->isp_ini_cfg.isp_tunning_settings.isp_d2d_lp2_nr_ybk[0], ISP_REG_TBL_LENGTH_16 * sizeof(HW_U8));
 
 	//tdf
 	mod_cfg->tdf_cfg.mot_info_init_en = 1;
@@ -1723,30 +1689,29 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 	if(!isp_gen->initial_cfg.isp_ctx_save_init_flag) {
 		mod_cfg->pltm_cfg.strength = 256;
 		mod_cfg->pltm_cfg.nrm_ratio = 2048;
-		mod_cfg->pltm_cfg.gtm_en = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_GTM_EN];
-		mod_cfg->pltm_cfg.lft_en = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_LTF_EN];
-		mod_cfg->pltm_cfg.dsc_en = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_EN];
-		mod_cfg->pltm_cfg.dcc_en = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DCC_EN];
-		mod_cfg->pltm_cfg.dsc_shf_bit = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_SHF_BIT];
-		mod_cfg->pltm_cfg.dsc_lw_th = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_LW_TH];
-		mod_cfg->pltm_cfg.dsc_hi_th = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_HI_TH];
-		mod_cfg->pltm_cfg.dsc_lw_ratio = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_LW_RT];
-		mod_cfg->pltm_cfg.dcc_shf_bit = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DCC_SHF_BIT];
-		mod_cfg->pltm_cfg.dcc_lw_th = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DCC_LW_TH];
-		mod_cfg->pltm_cfg.dcc_hi_th = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DCC_HI_TH];
-		mod_cfg->pltm_cfg.mgc_smth = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_MGC_INT_SMTH];
-		mod_cfg->pltm_cfg.mgc_lum_adpt = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_MGC_LUM_ADPT];
-		mod_cfg->pltm_cfg.sts_ceil_slp = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_STS_CEIL_SLP];
-		mod_cfg->pltm_cfg.sts_floor_slp = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_STS_FLOOR_SLP];
-		mod_cfg->pltm_cfg.sts_gd_ratio = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_STS_GD_RT];
-		mod_cfg->pltm_cfg.adjk_crct_ratio = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_ADJK_CRCT_RT];
-		mod_cfg->pltm_cfg.sts_flt_stren[0] = 384;//384
-		mod_cfg->pltm_cfg.sts_flt_stren[1] = 256;//256
-		mod_cfg->pltm_cfg.sts_flt_stren[2] = 64;//128
-		mod_cfg->pltm_cfg.adj1_asym_ratio = 0;
-		memcpy(&mod_cfg->pltm_cfg.stat_gd_cv[0], &param->isp_tunning_settings.isp_pltm_stat_gd_cv[0], 15 * sizeof(HW_U8));
-		memcpy(&mod_cfg->pltm_cfg.adj_k_df_cv[0], &param->isp_tunning_settings.isp_pltm_df_cv[0], ISP_REG_TBL_LENGTH_33 * sizeof(HW_U8));
 	}
+	mod_cfg->pltm_cfg.gtm_en = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_GTM_EN];
+	mod_cfg->pltm_cfg.lft_en = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_LTF_EN];
+	mod_cfg->pltm_cfg.dsc_en = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_EN];
+	mod_cfg->pltm_cfg.dcc_en = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DCC_EN];
+	mod_cfg->pltm_cfg.dsc_shf_bit = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_SHF_BIT];
+	mod_cfg->pltm_cfg.dsc_lw_th = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_LW_TH];
+	mod_cfg->pltm_cfg.dsc_hi_th = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DSC_HI_TH];
+	mod_cfg->pltm_cfg.dcc_shf_bit = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DCC_SHF_BIT];
+	mod_cfg->pltm_cfg.dcc_lw_th = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DCC_LW_TH];
+	mod_cfg->pltm_cfg.dcc_hi_th = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_DCC_HI_TH];
+	mod_cfg->pltm_cfg.mgc_smth = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_MGC_INT_SMTH];
+	mod_cfg->pltm_cfg.mgc_lum_adpt = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_MGC_LUM_ADPT];
+	mod_cfg->pltm_cfg.sts_ceil_slp = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_STS_CEIL_SLP];
+	mod_cfg->pltm_cfg.sts_floor_slp = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_STS_FLOOR_SLP];
+	mod_cfg->pltm_cfg.sts_gd_ratio = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_STS_GD_RT];
+	mod_cfg->pltm_cfg.adjk_crct_ratio = param->isp_tunning_settings.pltm_cfg[ISP_PLTM_ADJK_CRCT_RT];
+	mod_cfg->pltm_cfg.sts_flt_stren[0] = 384;//384
+	mod_cfg->pltm_cfg.sts_flt_stren[1] = 256;//256
+	mod_cfg->pltm_cfg.sts_flt_stren[2] = 64;//128
+	mod_cfg->pltm_cfg.adj1_asym_ratio = 0;
+	memcpy(&mod_cfg->pltm_cfg.stat_gd_cv[0], &param->isp_tunning_settings.isp_pltm_stat_gd_cv[0], 15 * sizeof(HW_U8));
+	memcpy(&mod_cfg->pltm_cfg.adj_k_df_cv[0], &param->isp_tunning_settings.isp_pltm_df_cv[0], ISP_REG_TBL_LENGTH_33 * sizeof(HW_U8));
 
 	//gca
 	mod_cfg->mode_cfg.gca_mode = param->isp_tunning_settings.gca_cfg[ISP_GCA_MODE];
@@ -1791,6 +1756,24 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 
 	// msc
 	if (param->isp_test_settings.msc_en) {
+		for (i = 0; i < ISP_MSC_TBL_LUT_SIZE; i++) {
+			msc_w_count += param->isp_tunning_settings.msc_blw_lut[i];
+			msc_h_count += param->isp_tunning_settings.msc_blh_lut[i];
+		}
+		if (isp_gen->sensor_info.width_overlayer) {
+			if (msc_w_count != isp_gen->sensor_info.width_overlayer / 2 || msc_h_count != isp_gen->sensor_info.sensor_height / 2) {
+				ISP_WARN("msc_blw_lut or msc_blh_lut abnormal, can not enable msc.(%d,%d)(%d,%d)\n", msc_w_count, msc_h_count,
+					isp_gen->sensor_info.width_overlayer / 2, isp_gen->sensor_info.sensor_height / 2);
+				ISP_CTX_MODULE_EN(0, ISP_FEATURES_MSC);
+			}
+		} else {
+			if (msc_w_count != isp_gen->sensor_info.sensor_width / 2 || msc_h_count != isp_gen->sensor_info.sensor_height / 2) {
+				ISP_WARN("msc_blw_lut or msc_blh_lut abnormal, can not enable msc.(%d,%d)(%d,%d)\n", msc_w_count, msc_h_count,
+					isp_gen->sensor_info.sensor_width / 2, isp_gen->sensor_info.sensor_height / 2);
+				ISP_CTX_MODULE_EN(0, ISP_FEATURES_MSC);
+			}
+		}
+
 		mod_cfg->mode_cfg.msc_mode = param->isp_tunning_settings.msc_mode;
 		for (i = 0; i < ISP_MSC_TBL_LUT_SIZE; i++) {
 			mod_cfg->msc_cfg.msc_blw_lut[i] = clamp(param->isp_tunning_settings.msc_blw_lut[i], 2, 1023);
@@ -1831,7 +1814,7 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 		memcpy(&mod_cfg->fpn_cfg.fpn_pfpn_phase_lut[0], &param->isp_tunning_settings.fpn_pfpn_phase_lut[0], ISP_PFPN_TBL_SIZE * sizeof(HW_S8));
 		memcpy(&mod_cfg->fpn_cfg.fpn_pfpn_period_lut[0], &param->isp_tunning_settings.fpn_pfpn_period_lut[0], ISP_PFPN_TBL_SIZE * sizeof(HW_U8));
 		memcpy(&mod_cfg->fpn_cfg.fpn_pfpn_offset_lut[0], &param->isp_tunning_settings.fpn_pfpn_offset_lut[0], ISP_PFPN_TBL_SIZE * sizeof(HW_S8));
-		memcpy(&mod_cfg->fpn_cfg.fpn_cfpn_coeff_lut[0], &param->isp_tunning_settings.fpn_cfpn_coeff_lut[0], ISP_REG_TBL_LENGTH_17 * sizeof(HW_U8));
+		//memcpy(&mod_cfg->fpn_cfg.fpn_cfpn_coeff_lut[0], &param->isp_tunning_settings.fpn_cfpn_coeff_lut[0], ISP_REG_TBL_LENGTH_17 * sizeof(HW_U8));
 		memcpy(&mod_cfg->fpn_cfg.fpn_pfpn_scale_coeff_lut[0], &param->isp_tunning_settings.fpn_pfpn_scale_coeff_lut[0], ISP_PFPN_TBL_SIZE * sizeof(HW_U8));
 		if (mod_cfg->fpn_table != NULL) {
 			HW_U8 *fpn_cfpn_gain_corr_tbl = mod_cfg->fpn_table;
@@ -1846,7 +1829,7 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 		if (isp_gen->sensor_otp.otp_info && isp_gen->sensor_otp.pmsc_table &&
 			isp_gen->sensor_otp.pwb_table && isp_gen->sensor_otp.paf_table) {
 			/* msc */
-			if (isp_gen->stitch_mode == STITCH_2IN1_LINNER) {
+			if (isp_gen->stitch_mode == STITCH_2IN1_LINEAR) {
 				for(i = 0; i < OTP_MSC_SIZE_2IN1; i++) {
 					isp_gen->sensor_otp.otp_info->msc_golden_ratio[i] = (float)max(isp_gen->sensor_otp.pmsc_table[i], 1) / max(msc_golden[i], 1);
 				}
@@ -2011,10 +1994,6 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 		ISP_REG_TBL_LENGTH_32 * sizeof(HW_U16));
 	memcpy(&mod_cfg->sharp_cfg.sharp_hsv[0], &param->isp_tunning_settings.isp_sharp_hsv[0],
 		46 * sizeof(HW_U16));
-	memcpy(&mod_cfg->sharp_cfg.sharp_ratio_by_mot[0], &param->isp_tunning_settings.sharp_ratio_by_mot[0],
-		ISP_SHARP_RT_TBL_SIZE * sizeof(HW_U8));
-	memcpy(&mod_cfg->sharp_cfg.sharp_ratio_by_tex[0], &param->isp_tunning_settings.sharp_ratio_by_tex[0],
-		ISP_SHARP_RT_TBL_SIZE * sizeof(HW_U8));
 
 #ifdef USE_ENCPP
 	/*encpp_top*/
@@ -2064,13 +2043,9 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 	memcpy(&isp_gen->encpp_sharp_cfg.sharp_hsv[0], &param->isp_tunning_settings.encpp_sharp_hsv[0],
 		46 * sizeof(HW_U16));
 	memcpy(&isp_gen->encpp_sharp_cfg.sharp_ls_map_lut[0], &param->isp_tunning_settings.encpp_sharp_ls_map_lut[0],
-		ISP_REG_TBL_LENGTH_32 * sizeof(HW_U16));
+		ISP_REG_TBL_LENGTH_32 * sizeof(HW_U8));
 	memcpy(&isp_gen->encpp_sharp_cfg.sharp_texture_lut[0], &param->isp_tunning_settings.encpp_sharp_texture_lut[0],
-		ISP_REG_TBL_LENGTH_32 * sizeof(HW_U16));
-	memcpy(&isp_gen->encpp_sharp_cfg.sharp_ratio_by_mot[0], &param->isp_tunning_settings.encpp_sharp_ratio_by_mot[0],
-		ISP_SHARP_RT_TBL_SIZE * sizeof(HW_U8));
-	memcpy(&isp_gen->encpp_sharp_cfg.sharp_ratio_by_tex[0], &param->isp_tunning_settings.encpp_sharp_ratio_by_tex[0],
-		ISP_SHARP_RT_TBL_SIZE * sizeof(HW_U8));
+		ISP_REG_TBL_LENGTH_32 * sizeof(HW_U8));
 
 	/*encpp ldci*/
 	isp_gen->encpp_ldci_cfg.ldci_mot0_en = param->isp_tunning_settings.encpp_ldci_comm_cfg[ENCPP_LDCI_MOT0_EN];
@@ -2116,7 +2091,7 @@ static void __isp_ctx_cfg_mod(struct isp_lib_context *isp_gen)
 		config_msc_table(isp_gen, 512, 256);
 	}
 
-	config_nr_msc_table(isp_gen, 1);
+	config_block_nr_table(isp_gen, 1);
 
 	//stat
 	int x_start, y_start;
@@ -2162,8 +2137,8 @@ int __isp_alloc_reg_tbl(struct isp_lib_context *isp_gen)
 	0x04380780, 0x04380780, 0x00000000, 0x00000000, /* 0x0420 */
 	0x00000000, 0x00000000, 0x32040030, 0x000010eb, /* 0x0430 */
 	0x00000000, 0x00000000, 0x00000000, 0x00000000, /* 0x0440 */
-	0x00000000, 0x00000000, 0x32723232, 0x000c0180, /* 0x0450 */
-	0x0c320c32, 0x03414180, 0x04380072, 0x00000000, /* 0x0460 */
+	0x00000000, 0x00000000, 0x32723232, 0x00140180, /* 0x0450 */
+	0x18321432, 0x02410180, 0x04380072, 0x00000000, /* 0x0460 */
 	0x00000000, 0x00000000, 0x00000000, 0x00000000, /* 0x0470 */
 	0x00000000, 0x00000000, 0x00000000, 0x00000000, /* 0x0480 */
 	0x1fc01fc0, 0x1fc01fc0, 0x000c00c0, 0x00000000, /* 0x0490 */
@@ -2539,6 +2514,7 @@ HW_S32 __isp_ctx_update_iso_cfg(struct isp_lib_context *isp_gen)
 	isp_gen->iso_entity_ctx.iso_param->shading_adjust = true;
 	isp_gen->iso_entity_ctx.iso_param->encoder_adjust = true;
 	isp_gen->iso_entity_ctx.iso_param->awb_adjust = true;
+	isp_gen->iso_entity_ctx.iso_param->nrp_adjust = true;
 
 	if((isp_gen->isp_ini_cfg.isp_test_settings.af_en == 1) || (isp_gen->isp_ini_cfg.isp_test_settings.isp_test_focus == 1))
 		isp_gen->iso_entity_ctx.iso_param->af_cfg_adjust = true;
@@ -2648,11 +2624,7 @@ HW_S32 __isp_ctx_update_awb_cfg(struct isp_lib_context *isp_gen)
 	//test cfg.
 	isp_gen->awb_entity_ctx.awb_param->test_cfg.awb_en = isp_gen->isp_ini_cfg.isp_test_settings.awb_en;
 	isp_gen->awb_entity_ctx.awb_param->test_cfg.isp_color_temp = isp_gen->isp_ini_cfg.isp_test_settings.isp_color_temp;
-	if (isp_gen->stitch_mode == STITCH_NONE) {
-		isp_gen->awb_entity_ctx.awb_param->test_cfg.isp_test_mode = clamp(isp_gen->isp_ini_cfg.isp_3a_settings.local_wb_coef, -1, 20);
-	} else {
-		isp_gen->awb_entity_ctx.awb_param->test_cfg.isp_test_mode = -1;
-	}
+	isp_gen->awb_entity_ctx.awb_param->test_cfg.isp_test_mode = 0;
 
 	return 0;
 }
@@ -2880,7 +2852,7 @@ void __get_sensor_temp_param(struct isp_lib_context *isp_gen)
 		ISP_LIB_LOG(ISP_LOG_ISO, "sensor temperature=%d.  temperature_param = %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n", isp_gen->sensor_info.temperature,
 					isp_gen->temp_info.temperature_param[TEMP_COMP_2D_BLACK], isp_gen->temp_info.temperature_param[TEMP_COMP_2D_WHITE],
 					isp_gen->temp_info.temperature_param[TEMP_COMP_3D_BLACK], isp_gen->temp_info.temperature_param[TEMP_COMP_3D_WHITE],
-					isp_gen->temp_info.temperature_param[TEMP_COMP_NS_LW], isp_gen->temp_info.temperature_param[TEMP_COMP_NS_HI],
+					isp_gen->temp_info.temperature_param[TEMP_COMP_EDGE_NSR], isp_gen->temp_info.temperature_param[TEMP_COMP_FLAT_NSR],
 					isp_gen->temp_info.temperature_param[TEMP_COMP_DTC_STREN], isp_gen->temp_info.temperature_param[TEMP_COMP_BLC_R],
 					isp_gen->temp_info.temperature_param[TEMP_COMP_BLC_G], isp_gen->temp_info.temperature_param[TEMP_COMP_BLC_B],
 					isp_gen->temp_info.temperature_param[TEMP_COMP_SHARP], isp_gen->temp_info.temperature_param[TEMP_COMP_SATU_LOW],
@@ -2890,8 +2862,8 @@ void __get_sensor_temp_param(struct isp_lib_context *isp_gen)
 		isp_gen->temp_info.temperature_param[TEMP_COMP_2D_WHITE] = 256;
 		isp_gen->temp_info.temperature_param[TEMP_COMP_3D_BLACK] = 256;
 		isp_gen->temp_info.temperature_param[TEMP_COMP_3D_WHITE] = 256;
-		isp_gen->temp_info.temperature_param[TEMP_COMP_NS_LW] = 256;
-		isp_gen->temp_info.temperature_param[TEMP_COMP_NS_HI] = 256;
+		isp_gen->temp_info.temperature_param[TEMP_COMP_EDGE_NSR] = 256;
+		isp_gen->temp_info.temperature_param[TEMP_COMP_FLAT_NSR] = 256;
 		isp_gen->temp_info.temperature_param[TEMP_COMP_DTC_STREN] = 256;
 		isp_gen->temp_info.temperature_param[TEMP_COMP_BLC_R] = 0;
 		isp_gen->temp_info.temperature_param[TEMP_COMP_BLC_G] = 0;
@@ -2901,6 +2873,74 @@ void __get_sensor_temp_param(struct isp_lib_context *isp_gen)
 		isp_gen->temp_info.temperature_param[TEMP_COMP_SATU_MID] = 256;
 		isp_gen->temp_info.temperature_param[TEMP_COMP_SATU_HIGH] = 256;
 	}
+}
+
+void isp_get_software_ir_param(struct isp_lib_context *isp_gen)
+{
+	int light_stat_num[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	int awb_stat_distance[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	int awb_stat_distance_sum = 0, normal_win_cnt = 0, extra_win_cnt = 0, irlight_win_cnt = 0;
+	int awb_dx = 0, awb_dy = 0;
+	HW_U32 i = 0, j = 0, n = 0, k = 0, m = 0;
+	HW_S32 rgain_ir = 0, bgain_ir = 0, rgain_ir_sum = 0, bgain_ir_sum = 0, cnt = 0;
+	struct isp_awb_stats_s *awb_stats = &isp_gen->stats_ctx.stats.awb_stats;
+	struct isp_param_config *param = &isp_gen->isp_ini_cfg;
+
+	if (isp_gen->isp_ir_flag != ISP_IR_MODE)
+		return;
+
+	for (n = 0; n < ISP_AWB_ROW * ISP_AWB_COL; n++) {
+		i = n / ISP_AWB_COL;
+		j = n % ISP_AWB_COL;
+
+		rgain_ir = awb_stats->awb_avg_r[i][j] * 256 / max(1, awb_stats->awb_avg_g[i][j]);
+		bgain_ir = awb_stats->awb_avg_b[i][j] * 256 / max(1, awb_stats->awb_avg_g[i][j]);
+		rgain_ir_sum += (rgain_ir - 256);
+		bgain_ir_sum += (bgain_ir - 256);
+		cnt++;
+
+		for (k = 0; k < param->isp_3a_settings.awb_light_num; k++) {
+			awb_dx = abs(param->isp_3a_settings.awb_light_info[k * 10 + 0] - rgain_ir);
+			awb_dy = abs(param->isp_3a_settings.awb_light_info[k * 10 + 2] - bgain_ir);
+			awb_stat_distance[k] = sqrtf(awb_dx*awb_dx + awb_dy*awb_dy);
+
+			if(awb_stat_distance[k] < (param->isp_3a_settings.awb_light_info[k * 10 + 6] >> 1)) {
+				light_stat_num[k] +=  10;
+				break;
+			} else {
+				if(awb_stat_distance[k] < ISP_IR_DISTANCE_THRESHOLD)
+					awb_stat_distance_sum += awb_stat_distance[k];
+			}
+
+			if(k == param->isp_3a_settings.awb_light_num - 1) {
+				for(m = 0 ; m < param->isp_3a_settings.awb_light_num ; m++) {
+					if(awb_stat_distance[m] < ISP_IR_DISTANCE_THRESHOLD && awb_stat_distance_sum > 0) {
+						light_stat_num[m] += (awb_stat_distance[m] * 10) / awb_stat_distance_sum ;
+					}
+					if(awb_stat_distance_sum == 0) {
+						light_stat_num[param->isp_3a_settings.awb_light_num] += 10;
+						break;
+					}
+				}
+			}
+		}
+		awb_stat_distance_sum = 0;
+	}
+
+	isp_gen->software_ir_info.rgain_ir = rgain_ir_sum / (cnt + 1);
+	isp_gen->software_ir_info.bgain_ir = bgain_ir_sum / (cnt + 1);
+
+	for(m = 0 ; m < param->isp_3a_settings.awb_light_num; m++) {
+		if (param->isp_3a_settings.awb_light_info[m * 10 + 7] == ISP_IRLIGHT_COLOR_TEMP) {
+			irlight_win_cnt = light_stat_num[m] / 10;
+		} else {
+			normal_win_cnt += light_stat_num[m] / 10;
+		}
+	}
+	extra_win_cnt = light_stat_num[param->isp_3a_settings.awb_light_num] / 10;
+	isp_gen->software_ir_info.irlight_win_cnt = irlight_win_cnt;
+	isp_gen->software_ir_info.normal_win_cnt = normal_win_cnt;
+	isp_gen->software_ir_info.extra_win_cnt = extra_win_cnt;
 }
 
 void __isp_ctx_config(struct isp_lib_context *isp_gen)
@@ -3056,13 +3096,11 @@ int isp_ctx_algo_init(struct isp_lib_context *isp_gen, const struct isp_ctx_oper
 		isp_gen->pltm_entity_ctx.pltm_param->isp_platform_id = isp_gen->module_cfg.isp_platform_id;
 	}
 
-#if (ISP_VERSION == 600)
 	isp_gen->module_cfg.module_entity = isp_module_init();
 	if (isp_gen->module_cfg.module_entity == NULL) {
 		ISP_ERR("isp module Entity is BUSY or NULL!\n");
 		return -1;
 	}
-#endif
 
 #if ISP_LIB_USE_ROLLOFF
 	//ROLLOFF init
@@ -3163,8 +3201,10 @@ HW_S32 isp_ctx_rear_algo_run(struct isp_lib_context *isp_gen)
 	}
 #endif
 
-	__isp_awb_set_params(isp_gen);
-	__isp_awb_run(isp_gen);
+	if(isp_gen->isp_ir_flag != ISP_IR_MODE) {
+		__isp_awb_set_params(isp_gen);
+		__isp_awb_run(isp_gen);
+	}
 
 	if (isp_gen->isp_ini_cfg.isp_test_settings.lsc_en)
 		config_lens_table(isp_gen, isp_gen->af_entity_ctx.af_result.std_code_output);
@@ -3177,9 +3217,14 @@ HW_S32 isp_ctx_rear_algo_run(struct isp_lib_context *isp_gen)
 		}
 #endif
 		config_msc_table(isp_gen, isp_gen->af_entity_ctx.af_result.std_code_output, isp_gen->iso_entity_ctx.iso_result.shading_comp);
-		if (isp_gen->isp_ini_cfg.isp_test_settings.denoise_en || isp_gen->isp_ini_cfg.isp_test_settings.tdf_en) {
-			config_nr_msc_table(isp_gen, 0);
-		}
+	}
+
+	if (isp_gen->isp_ini_cfg.isp_test_settings.denoise_en || isp_gen->isp_ini_cfg.isp_test_settings.tdf_en) {
+		config_block_nr_table(isp_gen, 0);
+	}
+
+	if (isp_gen->isp_ini_cfg.isp_test_settings.fpn_en) {
+		__isp_fpn_set_params(isp_gen);
 	}
 
 	isp_apply_colormatrix(isp_gen);
@@ -3220,9 +3265,7 @@ int isp_ctx_algo_exit(struct isp_lib_context *isp_gen)
 	gtm_exit(isp_gen->gtm_entity_ctx.gtm_entity);
 	pltm_exit(isp_gen->pltm_entity_ctx.pltm_entity);
 	iso_exit(isp_gen->iso_entity_ctx.iso_entity);
-#if (ISP_VERSION == 600)
 	isp_module_exit(isp_gen->module_cfg.module_entity);
-#endif
 #if ISP_LIB_USE_ROLLOFF
 	rolloff_exit(isp_gen->rolloff_entity_ctx.rolloff_entity);
 #endif
@@ -3334,6 +3377,11 @@ int isp_ctx_config_init(struct isp_lib_context *isp_gen)
 
 	if (isp_gen->tune.effect != ISP_COLORFX_NONE)
 		isp_gen->isp_3a_change_flags &= ~ISP_SET_HUE;
+
+	if (isp_gen->initial_cfg.effect_hold_cnt) {
+		isp_gen->isp_3a_change_flags &= ~ISP_SET_HUE;
+		isp_gen->isp_3a_change_flags &= ~ISP_SET_EFFECT;
+	}
 
 	isp_apply_settings(isp_gen);
 

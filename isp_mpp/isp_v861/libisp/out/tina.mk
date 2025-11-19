@@ -20,13 +20,12 @@ else ifeq ($(LIBISP_CFG_TOOLCHAIN_LIBC), glibc)
 endif
 
 #set dst file name: shared library, static library, execute bin.
-ifeq ($(LIBISP_CFG_COMPILE_DYNAMIC_LIB), Y)
-LOCAL_TARGET_DYNAMIC := $(basename $(notdir $(wildcard $(LOCAL_PREBUILD_LIBS_PATH)/*.so)))
+LOCAL_TARGET_DYNAMIC := 
 target_dynamic := $(patsubst %,$(CUR_PATH)/out/%.so,$(patsubst %.so,%,$(LOCAL_TARGET_DYNAMIC)))
-else
+
 LOCAL_TARGET_STATIC := $(basename $(notdir $(wildcard $(LOCAL_PREBUILD_LIBS_PATH)/*.a)))
 target_static := $(patsubst %,$(CUR_PATH)/out/%.a,$(patsubst %.a,%,$(LOCAL_TARGET_STATIC)))
-endif
+
 LOCAL_TARGET_BIN :=
 
 #generate include directory flags for gcc.

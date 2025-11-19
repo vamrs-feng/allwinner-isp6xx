@@ -194,6 +194,11 @@ typedef enum sock_command_code_e
 	* for special tuning
 	*/
 	SOCK_CMD_SPECIAL_TUNING,
+	/*
+	* for get statistics
+	* cmd_ids[1] - cmd type
+	*/
+	SOCK_CMD_STAT_MOTION_TEXTURE,
 	SOCK_CMD_COUNT
 } sock_command_code;
 

@@ -87,7 +87,10 @@ LOCAL_STATIC_LIBS += \
 	libisp_pltm \
 	libisp_rolloff \
 	libawion \
-	libvenc_codec \
+	libvenc_common \
+	libvenc_h264 \
+	libvenc_h265 \
+	libvenc_jpeg \
 	libvencoder \
 	libMemAdapter \
 	libVE \

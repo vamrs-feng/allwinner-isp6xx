@@ -2861,6 +2861,74 @@ void __get_sensor_temp_param(struct isp_lib_context *isp_gen)
 	}
 }
 
+void isp_get_software_ir_param(struct isp_lib_context *isp_gen)
+{
+	int light_stat_num[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	int awb_stat_distance[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	int awb_stat_distance_sum = 0, normal_win_cnt = 0, extra_win_cnt = 0, irlight_win_cnt = 0;
+	int awb_dx = 0, awb_dy = 0;
+	HW_U32 i = 0, j = 0, n = 0, k = 0, m = 0;
+	HW_S32 rgain_ir = 0, bgain_ir = 0, rgain_ir_sum = 0, bgain_ir_sum = 0, cnt = 0;
+	struct isp_awb_stats_s *awb_stats = &isp_gen->stats_ctx.stats.awb_stats;
+	struct isp_param_config *param = &isp_gen->isp_ini_cfg;
+
+	if (isp_gen->isp_ir_flag != ISP_IR_MODE)
+		return;
+
+	for (n = 0; n < ISP_AWB_ROW * ISP_AWB_COL; n++) {
+		i = n / ISP_AWB_COL;
+		j = n % ISP_AWB_COL;
+
+		rgain_ir = awb_stats->awb_avg_r[i][j] * 256 / max(1, awb_stats->awb_avg_g[i][j]);
+		bgain_ir = awb_stats->awb_avg_b[i][j] * 256 / max(1, awb_stats->awb_avg_g[i][j]);
+		rgain_ir_sum += (rgain_ir - 256);
+		bgain_ir_sum += (bgain_ir - 256);
+		cnt++;
+
+		for (k = 0; k < param->isp_3a_settings.awb_light_num; k++) {
+			awb_dx = abs(param->isp_3a_settings.awb_light_info[k * 10 + 0] - rgain_ir);
+			awb_dy = abs(param->isp_3a_settings.awb_light_info[k * 10 + 2] - bgain_ir);
+			awb_stat_distance[k] = sqrtf(awb_dx*awb_dx + awb_dy*awb_dy);
+
+			if(awb_stat_distance[k] < (param->isp_3a_settings.awb_light_info[k * 10 + 6] >> 1)) {
+				light_stat_num[k] +=  10;
+				break;
+			} else {
+				if(awb_stat_distance[k] < ISP_IR_DISTANCE_THRESHOLD)
+					awb_stat_distance_sum += awb_stat_distance[k];
+			}
+
+			if(k == param->isp_3a_settings.awb_light_num - 1) {
+				for(m = 0 ; m < param->isp_3a_settings.awb_light_num ; m++) {
+					if(awb_stat_distance[m] < ISP_IR_DISTANCE_THRESHOLD && awb_stat_distance_sum > 0) {
+						light_stat_num[m] += (awb_stat_distance[m] * 10) / awb_stat_distance_sum ;
+					}
+					if(awb_stat_distance_sum == 0) {
+						light_stat_num[param->isp_3a_settings.awb_light_num] += 10;
+						break;
+					}
+				}
+			}
+		}
+		awb_stat_distance_sum = 0;
+	}
+
+	isp_gen->software_ir_info.rgain_ir = rgain_ir_sum / (cnt + 1);
+	isp_gen->software_ir_info.bgain_ir = bgain_ir_sum / (cnt + 1);
+
+	for(m = 0 ; m < param->isp_3a_settings.awb_light_num; m++) {
+		if (param->isp_3a_settings.awb_light_info[m * 10 + 7] == ISP_IRLIGHT_COLOR_TEMP) {
+			irlight_win_cnt = light_stat_num[m] / 10;
+		} else {
+			normal_win_cnt += light_stat_num[m] / 10;
+		}
+	}
+	extra_win_cnt = light_stat_num[param->isp_3a_settings.awb_light_num] / 10;
+	isp_gen->software_ir_info.irlight_win_cnt = irlight_win_cnt;
+	isp_gen->software_ir_info.normal_win_cnt = normal_win_cnt;
+	isp_gen->software_ir_info.extra_win_cnt = extra_win_cnt;
+}
+
 void __isp_ctx_config(struct isp_lib_context *isp_gen)
 {
 	__isp_ctx_apply_enable(isp_gen);
@@ -3139,10 +3207,12 @@ HW_S32 isp_ctx_rear_algo_run(struct isp_lib_context *isp_gen)
 	}
 #endif
 
-	__isp_awb_set_params(isp_gen);
-	if ( (isp_gen->isp_algo_cnt > isp_gen->isp_algo_freq_div) || (isp_gen->isp_algo_flag_div & ISP_LOG_AWB) ) {
-		__isp_awb_run(isp_gen);
-		isp_gen->awb_frame_cnt++;
+	if (isp_gen->isp_ir_flag != ISP_IR_MODE) {
+		__isp_awb_set_params(isp_gen);
+		if ( (isp_gen->isp_algo_cnt > isp_gen->isp_algo_freq_div) || (isp_gen->isp_algo_flag_div & ISP_LOG_AWB) ) {
+			__isp_awb_run(isp_gen);
+			isp_gen->awb_frame_cnt++;
+		}
 	}
 
 	if (isp_gen->isp_ini_cfg.isp_test_settings.lsc_en)

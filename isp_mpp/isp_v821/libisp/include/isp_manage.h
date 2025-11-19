@@ -86,6 +86,9 @@ extern unsigned int isp_lib_log_param;
 #define ISP_AF_START_FRAME_NUM 3
 #define ISP_AWB_START_FRAME_NUM 3
 
+#define ISP_IR_DISTANCE_THRESHOLD 100
+#define ISP_IRLIGHT_COLOR_TEMP 8500
+
 #define FRAME_ID_1 1
 #define ISP_WIN_MODE_MATRIX 0
 #define MIPI_SWITCH_FRAME_CROP_WIN 0
@@ -438,6 +441,14 @@ struct isp_algo_save {
 	struct local_wb_data_save *local_wb_save;
 };
 
+struct isp_software_ir_info {
+	HW_S32 rgain_ir;
+	HW_S32 bgain_ir;
+	HW_S32 irlight_win_cnt;
+	HW_S32 normal_win_cnt;
+	HW_S32 extra_win_cnt;
+};
+
 struct sensor_mipi_switch_entity_info {
 	struct sensor_mipi_switch_entity mipi_switch_info;
 	HW_U32 mipi_switch_enable;
@@ -562,8 +573,7 @@ struct isp_lib_context {
 #ifdef USE_ENCPP
 	struct encpp_static_sharp_config encpp_static_sharp_cfg;
 #endif
-	HW_S32 rgain_ir;
-	HW_S32 bgain_ir;
+	struct isp_software_ir_info software_ir_info;
 	struct isp_debug_info debug_param_info;
 	struct sensor_mipi_switch_entity_info switch_info;
 	struct isp_ai_scene ai_scene;
@@ -697,6 +707,7 @@ void isp_log_save_init(struct isp_lib_context *ctx);
 int isp_log_save_run(struct isp_lib_context *ctx);
 void isp_log_save_exit(struct isp_lib_context *ctx);
 
+void isp_get_software_ir_param(struct isp_lib_context *isp_gen);
 #endif //__BSP__ISP__ALGO__H
 
 

@@ -25,6 +25,7 @@
 typedef enum isp_gtm_type {
 	ISP_GTM_FIXED,
 	ISP_GTM_ERMHE,
+	ISP_GTM_KEEP_LUM,
 	ISP_GTM_TYPE_MAX,
 } gtm_type_t;
 

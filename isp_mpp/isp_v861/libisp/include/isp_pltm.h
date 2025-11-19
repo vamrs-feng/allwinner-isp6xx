@@ -61,8 +61,9 @@ typedef struct isp_pltm_stats {
 typedef struct isp_pltm_result {
 	int pltm_hdr_ratio;
 	HW_U16 pltm_auto_stren;
-	HW_U16 pltm_sharp_ss_compensation; //to provide the probability for sharpness module by adjusting its' ss_ns_lw & ls_ns_lw to parameter which can control the dark noise.
-	HW_U16 pltm_sharp_ls_compensation; //to provide the probability for sharpness module by adjusting its' ss_ns_lw & ls_ns_lw to parameter which can control the dark noise.
+	HW_U16 pltm_sharp_hs_compensation;
+	HW_U16 pltm_sharp_ms_compensation;
+	HW_U16 pltm_sharp_ls_compensation;
 	HW_U16 pltm_d2d_compensation;
 	HW_U16 pltm_d3d_compensation;
 	HW_U16 pltm_dark_block_num;

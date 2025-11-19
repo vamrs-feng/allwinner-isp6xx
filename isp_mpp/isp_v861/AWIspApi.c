@@ -129,7 +129,7 @@ static int awIspSetIspLargeImage(int isp_id)
 {
     int ret = -1;
 
-    isp_set_stitch_mode(isp_id, STITCH_2IN1_LINNER);
+    isp_set_stitch_mode(isp_id, STITCH_2IN1_LINEAR);
 
     if (isp_id % 2 == 0)
         ret = isp_set_sync((0x1 << isp_id) | (0x1 << (isp_id + 1)));
